@@ -1,0 +1,17 @@
+.gradle/
+**/build/
+.idea/
+*.iml
+local.properties
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+.env
+.env.*
+secrets/
+credentials/
+.DS_Store
+Thumbs.db
