@@ -1,5 +1,8 @@
 # S.T.A.R.S. Kinetic Torch
 
+> **Migration status (October 26, 2026):** The GitHub repository currently contains the README and initial safety/provenance documentation. The archived Kotlin/Android source tree is prepared separately but has **not yet been committed**. The specifications below describe that prepared baseline, not verified contents of this repository.
+
+
 **Kinetic Torch** is an Android flashlight utility exploring a user-configurable double-chop gesture to toggle a hardware flashlight, with a white-screen fallback and optional Quick Settings tile.
 
 This public repository begins with a **historical, unverified source snapshot** recovered from the owner's Drive project archive. It is intended as a development baseline, **not a tested release**.
