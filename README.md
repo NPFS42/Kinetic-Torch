@@ -45,4 +45,8 @@ This app is designed to perform local flashlight actions. Review the merged mani
 
 ## Licensing
 
-**Public visibility is not an open-source license.** An explicit license has not yet been selected. See `LICENSE-DECISION-PENDING.md` before copying or redistributing code.
+**STARS Kinetic Torch software is licensed under GNU GPL version 3 only (`GPL-3.0-only`).** Read the complete terms in [`LICENSE`](./LICENSE). This applies to software STARS has the right to license; independently owned dependencies retain their applicable licenses. STARS and NPFS trademarks are not licensed by the software license.
+
+The repository's historical Android source files are **not yet completely imported**, and a corresponding, reproducible source version for the uploaded beta APK has not been verified. The existence of a GPL license file is not a representation that the currently running APK has a complete published source package.
+
+See the [STARS licensing policy](https://github.com/NPFS42/STARS-Master-Archive/blob/main/licensing/LICENSING_POLICY.md) if you have access to the private Master Archive.
