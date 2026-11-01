@@ -41,5 +41,21 @@ fun main() {
         checkCase(!f.filter(0f,0f,9.81f,0L,out), "high-pass warmup")
         checkCase(f.filter(25f,0f,9.81f,500L,out), "high-pass ready")
     }
+    run {
+        // Two full gestures: an early OFF attempt is suppressed by design,
+        // while a fresh gesture after the 1,000 ms cooldown is recognized.
+        val d = detector()
+        checkCase(!d.onLinearAcceleration(24f,0f,0f,0L), "ON first chop")
+        checkCase(!d.onLinearAcceleration(0f,0f,0f,90L), "ON quiet valley")
+        checkCase(d.onLinearAcceleration(25f,0f,0f,300L), "ON second chop")
+        checkCase(!d.onLinearAcceleration(0f,0f,0f,500L), "within cooldown quiet")
+        checkCase(!d.onLinearAcceleration(23f,0f,0f,900L), "early OFF first chop suppressed")
+        checkCase(!d.onLinearAcceleration(0f,0f,0f,980L), "early OFF valley suppressed")
+        checkCase(!d.onLinearAcceleration(24f,0f,0f,1200L), "early OFF not a complete gesture")
+        checkCase(!d.onLinearAcceleration(0f,0f,0f,1350L), "reset valley")
+        checkCase(!d.onLinearAcceleration(23f,0f,0f,1460L), "fresh OFF first chop")
+        checkCase(!d.onLinearAcceleration(0f,0f,0f,1530L), "fresh OFF quiet valley")
+        checkCase(d.onLinearAcceleration(24f,0f,0f,1750L), "fresh OFF second chop recognized")
+    }
     println("PASS: $assertions offline assertions")
 }
