@@ -48,8 +48,8 @@ class ChopDetectionService : Service(), SensorEventListener {
         const val PREFS_NAME = "KineticTorchPrefs"
         const val KEY_SERVICE_ENABLED = "service_enabled"
         const val KEY_USE_SCREEN_TORCH = "use_screen_torch"     // Full-screen 100% white mode
-        const val KEY_FORCE_THRESHOLD = "force_threshold"       // Default: 18.5 m/s^2 (10.0..35.0)
-        const val KEY_CHOP_WINDOW_MS = "chop_window_ms"         // Default: 650 ms (300..1000)
+        const val KEY_FORCE_THRESHOLD = "force_threshold"       // Default from TorchDefaults (10.0..35.0)
+        const val KEY_CHOP_WINDOW_MS = "chop_window_ms"         // Default from TorchDefaults (300..1000)
         const val KEY_AUTO_OFF_MINUTES = "auto_off_minutes"     // Default: 10 min (0 = Disabled, 1..30)
         const val KEY_WAKE_MODE = "wake_mode"                   // 0=ScreenOn, 1=15s, 2=30s(Def), 3=2m, 4=10m, 5=AlwaysOn 24/7
         const val KEY_COOLDOWN_MS = "cooldown_ms"               // Default: 1000 ms
@@ -352,11 +352,11 @@ class ChopDetectionService : Service(), SensorEventListener {
 
     private fun loadSensitivityPrefs(sharedPrefs: SharedPreferences) {
         useScreenTorch = (flashCameraId == null) || sharedPrefs.getBoolean(KEY_USE_SCREEN_TORCH, false)
-        detector.forceThreshold = sharedPrefs.getFloat(KEY_FORCE_THRESHOLD, 18.5f)
-        detector.chopWindowMs = sharedPrefs.getInt(KEY_CHOP_WINDOW_MS, 650).toLong()
-        detector.cooldownMs = sharedPrefs.getInt(KEY_COOLDOWN_MS, 1000).toLong()
-        autoOffMinutes = sharedPrefs.getInt(KEY_AUTO_OFF_MINUTES, 10)
-        wakeMode = sharedPrefs.getInt(KEY_WAKE_MODE, 2).coerceIn(0, 5)
+        detector.forceThreshold = sharedPrefs.getFloat(KEY_FORCE_THRESHOLD, TorchDefaults.FORCE_THRESHOLD)
+        detector.chopWindowMs = sharedPrefs.getInt(KEY_CHOP_WINDOW_MS, TorchDefaults.CHOP_WINDOW_MS).toLong()
+        detector.cooldownMs = sharedPrefs.getInt(KEY_COOLDOWN_MS, TorchDefaults.COOLDOWN_MS).toLong()
+        autoOffMinutes = sharedPrefs.getInt(KEY_AUTO_OFF_MINUTES, TorchDefaults.AUTO_OFF_MINUTES)
+        wakeMode = sharedPrefs.getInt(KEY_WAKE_MODE, TorchDefaults.WAKE_MODE).coerceIn(0, 5)
         trace("settings_snapshot", "CURRENT_DETECTOR_AND_POWER_POLICY",
             "force_threshold" to detector.forceThreshold, "chop_window_ms" to detector.chopWindowMs,
             "cooldown_ms" to detector.cooldownMs, "auto_off_minutes" to autoOffMinutes,
@@ -790,6 +790,12 @@ class ChopDetectionService : Service(), SensorEventListener {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (DeviceEligibility.isMotorolaDevice()) {
+            prefs.edit { putBoolean(KEY_SERVICE_ENABLED, false) }
+            trace("service_blocked", "MOTOROLA_DEVICE_EXCLUDED")
+            stopSelf()
+            return START_NOT_STICKY
+        }
         trace("service_start_command", intent?.action ?: "START_OR_SYSTEM_RESTART",
             "flags" to flags, "start_id" to startId)
         if (intent?.action == ACTION_STOP_AND_OFF) {
