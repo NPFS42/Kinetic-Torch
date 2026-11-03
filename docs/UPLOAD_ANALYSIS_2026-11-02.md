@@ -14,7 +14,7 @@ SOURCE_RECOVERED; BUILD_AND_DEVICE_VALIDATION_PENDING. This review inspects sour
 - [ ] Select and document one tested build toolchain. Documents uses AGP 8.13.2 / Gradle 8.13 with daemon JDK 21 criteria, while Java/Kotlin compilation targets 17. The downloaded tree uses AGP 8.6.1 / Gradle 8.7. Do not assume either builds from metadata alone.
 - [ ] Restore a trusted Gradle wrapper JAR, record/verify wrapper and distribution integrity, then run a clean debug build and unit tests. Neither recovered Kinetic tree has the JAR.
 - [ ] Remove embedded signing passwords from active build configuration and use external local signing configuration; retain the existing signing key privately for upgrade continuity. Debug development must not require production keys.
-- [ ] Reconcile historical reports (10 ChopDetector + 3 GravityHighPass tests) with the available test source: GravityHighPassTest source was not recovered. Recover it or replace its coverage and run fresh tests; old XML is not current proof.
+- [x] Locate all 13 historical detector/filter test methods: `GravityHighPassTest` is a second class inside `ChopDetectorTest.kt`, not a missing file. Content inspection corrected the earlier filename-based conclusion. The debug-logging branch's first CI build subsequently passed these 13 plus four trace tests (17 total); on-device behavior remains unverified.
 - [ ] Review draft PR #1 against main; retain any useful APK provenance/offline regression checks, then retire the superseded import PR. Do not merge the older archive over Documents source.
 
 ## P1 — Diagnose and fix double-chop OFF (issue #2)
