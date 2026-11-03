@@ -62,7 +62,7 @@
             android:id="@+id/txtForceValue"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="1. Chop Force Threshold: 18.5 m/s²"
+            android:text="1. Chop Force Threshold: 12.0 m/s²"
             android:textColor="#CCCCCC"
             android:layout_marginTop="12dp" />
 
@@ -76,7 +76,7 @@
             android:id="@+id/txtWindowValue"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="2. Double-Chop Window: 650 ms"
+            android:text="2. Double-Chop Window: 750 ms"
             android:textColor="#CCCCCC"
             android:layout_marginTop="12dp" />
 
