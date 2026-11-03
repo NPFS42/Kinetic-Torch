@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:id="@+id/rootScroll"
+    android:background="#121212"
+    android:clipToPadding="false"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="S.T.A.R.S. KINETIC TORCH"
+            android:textColor="#00E5FF"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:paddingBottom="4dp" />
+
+        <TextView
+            android:id="@+id/txtHardwareStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Hardware: Checking LED &amp; Proximity..."
+            android:textColor="#90A4AE"
+            android:textSize="12sp"
+            android:paddingBottom="4dp" />
+
+        <TextView
+            android:id="@+id/txtLivePeakReadout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Live Calibration Peak: 0.0 m/s² [Chop phone to test]"
+            android:textColor="#80CBC4"
+            android:textSize="13sp"
+            android:paddingBottom="10dp" />
+
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/switchServiceEnable"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Enable Chop-Flash Background Service"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:paddingVertical="6dp" />
+
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/switchScreenTorchFallback"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Use 100% White Screen Torch (Full Brightness)"
+            android:textColor="#E0E0E0"
+            android:textSize="14sp"
+            android:paddingVertical="6dp" />
+
+        <TextView
+            android:id="@+id/txtForceValue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="1. Chop Force Threshold: 18.5 m/s²"
+            android:textColor="#CCCCCC"
+            android:layout_marginTop="12dp" />
+
+        <SeekBar
+            android:id="@+id/seekForceThreshold"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp" />
+
+        <TextView
+            android:id="@+id/txtWindowValue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="2. Double-Chop Window: 650 ms"
+            android:textColor="#CCCCCC"
+            android:layout_marginTop="12dp" />
+
+        <SeekBar
+            android:id="@+id/seekChopWindow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp" />
+
+        <TextView
+            android:id="@+id/txtAutoOffValue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="3. Safety Auto-Shutoff Timer: 10 min"
+            android:textColor="#CCCCCC"
+            android:layout_marginTop="12dp" />
+
+        <SeekBar
+            android:id="@+id/seekAutoOffMinutes"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp" />
+
+        <TextView
+            android:id="@+id/txtWakeModeValue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="4. Standby Mode: Screen-Wake + 30s Window (Recommended)"
+            android:textColor="#CCCCCC"
+            android:layout_marginTop="12dp" />
+
+        <SeekBar
+            android:id="@+id/seekWakeMode"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="5"
+            android:layout_marginTop="4dp" />
+
+        <Button
+            android:id="@+id/btnAddQuickSettingsTile"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:text="Add Quick Settings Tile" />
+
+        <Button
+            android:id="@+id/btnBatteryExemption"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Grant Unrestricted Battery (Samsung / OEM)" />
+
+    </LinearLayout>
+</ScrollView>

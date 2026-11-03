@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Kinetic Torch</string>
+    <string name="tile_label">Chop Torch</string>
+    <string name="screen_torch_auto_enabled">100% White Screen Torch (Auto-Enabled: No LED Detected)</string>
+    <string name="screen_torch_hint">SCREEN TORCH 100% • DOUBLE-CHOP OR TAP TO TURN OFF</string>
+    <string name="hardware_status_format">%1$s • %2$s</string>
+    <string name="force_threshold_format">1. Chop Force Threshold: %.1f m/s²</string>
+    <string name="live_peak_format">Live Chop-Plane Peak: %.1f m/s² [%s]</string>
+</resources>
