@@ -25,12 +25,12 @@ jobs:
       - name: Use CI JDK and install Android build dependencies
         run: |
           rm -f gradle/gradle-daemon-jvm.properties
-          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+          sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
       - name: Test and assemble diagnostic APK
         run: gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:bundleDiagnostic :app:assembleDiagnostic
       - name: Verify debug APK signature and record checksums
         run: |
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs app/build/outputs/apk/debug/app-debug.apk
           sha256sum app/build/outputs/apk/debug/app-debug.apk
           sha256sum app/build/outputs/bundle/diagnostic/app-diagnostic.aab
       - name: Publish debug APK

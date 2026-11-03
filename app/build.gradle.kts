@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace = "com.npfs.stars.kinetictorch"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.npfs.stars.kinetictorch"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 5
         versionName = "1.3.0"
         buildConfigField("boolean", "DIAGNOSTICS_ENABLED", "false")
