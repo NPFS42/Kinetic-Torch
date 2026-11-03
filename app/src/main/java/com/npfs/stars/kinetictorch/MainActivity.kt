@@ -145,7 +145,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         val btnAddQsTile = findViewById<Button>(R.id.btnAddQuickSettingsTile)
         val btnBatteryExempt = findViewById<Button>(R.id.btnBatteryExemption)
-        findViewById<View>(R.id.debugPanel).visibility = if (BuildConfig.DEBUG) View.VISIBLE else View.GONE
+        findViewById<View>(R.id.debugPanel).visibility = if (BuildConfig.DIAGNOSTICS_ENABLED) View.VISIBLE else View.GONE
         findViewById<Button>(R.id.btnExportDebugLog).setOnClickListener {
             exportLogLauncher.launch("kinetic-torch-debug-${System.currentTimeMillis()}.jsonl")
         }

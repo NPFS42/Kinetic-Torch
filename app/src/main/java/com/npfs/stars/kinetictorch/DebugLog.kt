@@ -34,7 +34,7 @@ object DebugLog {
         private set
 
     @Synchronized fun start(context: Context) {
-        if (!BuildConfig.DEBUG || directory != null) return
+        if (!BuildConfig.DIAGNOSTICS_ENABLED || directory != null) return
         directory = File(context.applicationContext.filesDir, "debug-logs").also { it.mkdirs() }
         Thread({ consume() }, "kinetic-debug-writer").apply { isDaemon = true; start() }
         event("process_start", "version" to BuildConfig.VERSION_NAME,
@@ -51,7 +51,7 @@ object DebugLog {
     }
 
     fun event(name: String, vararg fields: Pair<String, Any?>) {
-        if (!BuildConfig.DEBUG || directory == null) return
+        if (!BuildConfig.DIAGNOSTICS_ENABLED || directory == null) return
         // Diagnostics must never break torch control, even if storage/serialization fails.
         try {
             val row = JSONObject().put("event", name).put("session", session)
@@ -99,7 +99,7 @@ object DebugLog {
 
     /** Call off the UI thread. Export oldest retained record first, including queue-loss notices. */
     fun export(output: OutputStream) {
-        check(BuildConfig.DEBUG && directory != null) { "Debug logger is not running" }
+        check(BuildConfig.DIAGNOSTICS_ENABLED && directory != null) { "Debug logger is not running" }
         check(flush(2000)) { "Logger busy; try export again" }
         synchronized(diskLock) {
             check(storageError == null) { "Log storage failed: $storageError" }

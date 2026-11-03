@@ -313,7 +313,7 @@ class ChopDetectionService : Service(), SensorEventListener {
             "has_proximity" to hasProximityHardware,
             "battery_exempt" to powerManager.isIgnoringBatteryOptimizations(packageName),
             "notifications_enabled" to getSystemService(NotificationManager::class.java).areNotificationsEnabled())
-        if (BuildConfig.DEBUG) detector.traceListener = { sample ->
+        if (BuildConfig.DIAGNOSTICS_ENABLED) detector.traceListener = { sample ->
             if (sample.reason == "FIRST_CHOP_RECORDED") gestureId++
             DebugLog.event("motion_sample", "reason" to sample.reason, "gesture_id" to gestureId,
                 "force" to sample.force, "in_plane" to sample.inPlane,
@@ -347,7 +347,7 @@ class ChopDetectionService : Service(), SensorEventListener {
         createNotificationChannels()
         startForegroundWithSpecialUse()
         applyWakeModePolicy()
-        if (BuildConfig.DEBUG) mainHandler.post(diagnosticHeartbeat)
+        if (BuildConfig.DIAGNOSTICS_ENABLED) mainHandler.post(diagnosticHeartbeat)
     }
 
     private fun loadSensitivityPrefs(sharedPrefs: SharedPreferences) {

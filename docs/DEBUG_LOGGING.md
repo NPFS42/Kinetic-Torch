@@ -24,7 +24,7 @@ An API returning without an exception is **not** logged as confirmed physical ac
 ## Storage and overhead
 Logs remain in app-private internal storage until the user exports them. No network/storage permission is added. A bounded 4,096-record queue writes on a background thread to four rotating files of about 2 MiB each (about 8 MiB retained). Overflow records how many events were lost. Raw streams are file-only; decisions also use Logcat tag `KineticTorchDebug`. Export flushes prior queued records, then copies retained files oldest first off the UI thread.
 
-Logging is guarded by `BuildConfig.DEBUG`; release builds do not capture/export logs and hide the debug panel. Diagnostic logging increases battery/CPU usage; use this build for reproduction rather than unattended daily operation. Existing app control policy, threshold defaults and pocket/auto-off protections are retained.
+Logging is guarded by `BuildConfig.DIAGNOSTICS_ENABLED`; normal release builds do not capture/export logs and hide the debug panel. Diagnostic logging increases battery/CPU usage; use this build for reproduction rather than unattended daily operation. Existing app control policy, threshold defaults and pocket/auto-off protections are retained.
 
 ## Build and verification
 The recovered root toolchain is AGP 8.13.2 / Gradle 8.13 with Java/Kotlin target 17 and local daemon JDK 21 criteria. The CI job installs JDK 21 and Android 35, uses installed Gradle 8.13 directly (the recovered wrapper JAR is missing), and removes the local daemon-vendor selection only in the runner workspace. It runs existing detector/filter tests plus trace-reason and observer-isolation regressions before assembling the debug APK. No production signing key is used.
@@ -32,3 +32,8 @@ The recovered root toolchain is AGP 8.13.2 / Gradle 8.13 with Java/Kotlin target
 Physical acceptance still requires a phone: export after failed/successful gestures; confirm chronological JSONL, screen-off behavior, camera callbacks, pocket guard, manual OFF, rotation and device restart. Do not mark the underlying ON/OFF defect fixed based on compilation alone.
 
 Source-review correction: `GravityHighPassTest` is present as a second class inside `ChopDetectorTest.kt` (three methods), despite no separately named test file. The earlier upload work list's missing-test-source item was based on filenames and is superseded by this content inspection.
+
+## Google Play internal-test variant
+The `diagnostic` build type keeps the normal package `com.npfs.stars.kinetictorch`, uses versionCode 5, enables the same logging, and is **not debuggable**. Normal `release` keeps logging disabled. CI builds unsigned diagnostic APK/AAB artifacts; these are not Play-upload-ready until signed with the owner's existing upload/release key. Never upload the `.debug` package as the main Play app.
+
+On the shop PC, Codex can run `tools/Build-PlayDiagnostic.ps1` with the existing keystore path and alias. The script prompts locally for signing passwords, builds/tests through Gradle, and restores the process environment afterwards. Keys/passwords must stay outside Git and chat. Keep the signed APK for device testing and the signed AAB for Play internal testing. Verify Play's registered upload-certificate fingerprint before uploading any update. App creation and Play App Signing terms must be completed in the NPFS LLC Play Console; policy/export declarations require the owner's attestation. No Play app or release has been created by this branch.
