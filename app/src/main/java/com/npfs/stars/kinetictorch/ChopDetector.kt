@@ -14,9 +14,9 @@ import kotlin.math.sqrt
  * with the second spike at least [MIN_SECOND_CHOP_GAP_MS] and at most [chopWindowMs] after the first.
  */
 class ChopDetector(
-    var forceThreshold: Float = 18.5f,
-    var chopWindowMs: Long = 650L,
-    var cooldownMs: Long = 1000L
+    var forceThreshold: Float = TorchDefaults.FORCE_THRESHOLD,
+    var chopWindowMs: Long = TorchDefaults.CHOP_WINDOW_MS.toLong(),
+    var cooldownMs: Long = TorchDefaults.COOLDOWN_MS.toLong()
 ) {
     companion object {
         /** Valley must drop below this fraction of the threshold between the two chops. */
