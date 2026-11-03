@@ -45,7 +45,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var switchService: MaterialSwitch
     private var hasLedFlash = false
     private var sessionPeakAccel = 0.0f
-    private var currentThreshold = 18.5f
+    private var currentThreshold = TorchDefaults.FORCE_THRESHOLD
+    private var suppressSliderWrites = false
 
     // Same motion pipeline as ChopDetectionService, so the live readout matches what triggers a chop
     private val gravityFilter = GravityHighPass()
@@ -126,6 +127,19 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
         cameraManager = getSystemService(CAMERA_SERVICE) as CameraManager
 
+        // Defense in depth: Play Console model exclusions alone do not block sideloaded installs.
+        if (DeviceEligibility.isMotorolaDevice()) {
+            prefs.edit { putBoolean(ChopDetectionService.KEY_SERVICE_ENABLED, false) }
+            stopService(Intent(this, ChopDetectionService::class.java))
+            androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle(R.string.motorola_excluded_title)
+                .setMessage(R.string.motorola_excluded_message)
+                .setCancelable(false)
+                .setPositiveButton(android.R.string.ok) { _, _ -> finish() }
+                .show()
+            return
+        }
+
         val txtHardwareStatus = findViewById<TextView>(R.id.txtHardwareStatus)
         txtLivePeakReadout = findViewById(R.id.txtLivePeakReadout)
         switchService = findViewById(R.id.switchServiceEnable)
@@ -143,6 +157,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         val seekWakeMode = findViewById<SeekBar>(R.id.seekWakeMode)
         val txtWakeModeValue = findViewById<TextView>(R.id.txtWakeModeValue)
 
+        val btnResetSliders = findViewById<Button>(R.id.btnResetSliders)
         val btnAddQsTile = findViewById<Button>(R.id.btnAddQuickSettingsTile)
         val btnBatteryExempt = findViewById<Button>(R.id.btnBatteryExemption)
         findViewById<View>(R.id.debugPanel).visibility = if (BuildConfig.DIAGNOSTICS_ENABLED) View.VISIBLE else View.GONE
@@ -188,7 +203,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         refreshServiceSwitch()
 
         // 2. Chop Force Threshold Slider (10.0 to 35.0 m/s^2, mapped as progress 0..250)
-        currentThreshold = prefs.getFloat(ChopDetectionService.KEY_FORCE_THRESHOLD, 18.5f)
+        currentThreshold = prefs.getFloat(ChopDetectionService.KEY_FORCE_THRESHOLD, TorchDefaults.FORCE_THRESHOLD)
         seekForce.max = 250
         seekForce.progress = ((currentThreshold - 10.0f) * 10).toInt().coerceIn(0, 250)
         txtForceValue.text = getString(R.string.force_threshold_format, currentThreshold)
@@ -197,7 +212,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 currentThreshold = 10.0f + (progress / 10.0f)
                 txtForceValue.text = getString(R.string.force_threshold_format, currentThreshold)
-                prefs.edit { putFloat(ChopDetectionService.KEY_FORCE_THRESHOLD, currentThreshold) }
+                if (!suppressSliderWrites) prefs.edit { putFloat(ChopDetectionService.KEY_FORCE_THRESHOLD, currentThreshold) }
                 sessionPeakAccel = 0.0f
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
@@ -205,7 +220,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         })
 
         // 3. Double-Chop Time Window Slider (300 ms to 1000 ms, mapped as progress 0..700)
-        val savedWindow = prefs.getInt(ChopDetectionService.KEY_CHOP_WINDOW_MS, 650)
+        val savedWindow = prefs.getInt(ChopDetectionService.KEY_CHOP_WINDOW_MS, TorchDefaults.CHOP_WINDOW_MS)
         seekWindow.max = 700
         seekWindow.progress = (savedWindow - 300).coerceIn(0, 700)
         txtWindowValue.text = "2. Double-Chop Window: ${savedWindow} ms"
@@ -214,14 +229,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 val windowMs = 300 + progress
                 txtWindowValue.text = "2. Double-Chop Window: ${windowMs} ms"
-                prefs.edit { putInt(ChopDetectionService.KEY_CHOP_WINDOW_MS, windowMs) }
+                if (!suppressSliderWrites) prefs.edit { putInt(ChopDetectionService.KEY_CHOP_WINDOW_MS, windowMs) }
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
 
         // 4. Auto-Shutoff Safety Timer Slider (0 = Disabled, 1 to 30 minutes)
-        val savedAutoOff = prefs.getInt(ChopDetectionService.KEY_AUTO_OFF_MINUTES, 10)
+        val savedAutoOff = prefs.getInt(ChopDetectionService.KEY_AUTO_OFF_MINUTES, TorchDefaults.AUTO_OFF_MINUTES)
         seekAutoOff.max = 30
         seekAutoOff.progress = savedAutoOff.coerceIn(0, 30)
         txtAutoOffValue.text = formatAutoOffLabel(savedAutoOff)
@@ -229,14 +244,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         seekAutoOff.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 txtAutoOffValue.text = formatAutoOffLabel(progress)
-                prefs.edit { putInt(ChopDetectionService.KEY_AUTO_OFF_MINUTES, progress) }
+                if (!suppressSliderWrites) prefs.edit { putInt(ChopDetectionService.KEY_AUTO_OFF_MINUTES, progress) }
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
 
         // 5. Standby Power Mode Slider (0 = Screen-On Only .. 2 = Screen-Wake + 30s .. 5 = Always-On 24/7)
-        val savedWakeMode = prefs.getInt(ChopDetectionService.KEY_WAKE_MODE, 2).coerceIn(0, 5)
+        val savedWakeMode = prefs.getInt(ChopDetectionService.KEY_WAKE_MODE, TorchDefaults.WAKE_MODE).coerceIn(0, 5)
         seekWakeMode.max = 5
         seekWakeMode.progress = savedWakeMode
         txtWakeModeValue.text = "4. Standby Mode: ${wakeModeLabels[savedWakeMode]}"
@@ -245,11 +260,39 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 val mode = progress.coerceIn(0, 5)
                 txtWakeModeValue.text = "4. Standby Mode: ${wakeModeLabels[mode]}"
-                prefs.edit { putInt(ChopDetectionService.KEY_WAKE_MODE, mode) }
+                if (!suppressSliderWrites) prefs.edit { putInt(ChopDetectionService.KEY_WAKE_MODE, mode) }
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
+
+        // Restore only the four visible sliders. Never disarm the service or wipe other settings.
+        btnResetSliders.setOnClickListener {
+            prefs.edit {
+                putFloat(ChopDetectionService.KEY_FORCE_THRESHOLD, TorchDefaults.FORCE_THRESHOLD)
+                putInt(ChopDetectionService.KEY_CHOP_WINDOW_MS, TorchDefaults.CHOP_WINDOW_MS)
+                putInt(ChopDetectionService.KEY_AUTO_OFF_MINUTES, TorchDefaults.AUTO_OFF_MINUTES)
+                putInt(ChopDetectionService.KEY_WAKE_MODE, TorchDefaults.WAKE_MODE)
+            }
+            suppressSliderWrites = true
+            try {
+                currentThreshold = TorchDefaults.FORCE_THRESHOLD
+                seekForce.progress = ((TorchDefaults.FORCE_THRESHOLD - 10.0f) * 10).toInt()
+                seekWindow.progress = TorchDefaults.CHOP_WINDOW_MS - 300
+                seekAutoOff.progress = TorchDefaults.AUTO_OFF_MINUTES
+                seekWakeMode.progress = TorchDefaults.WAKE_MODE
+            } finally {
+                suppressSliderWrites = false
+            }
+            txtForceValue.text = getString(R.string.force_threshold_format, TorchDefaults.FORCE_THRESHOLD)
+            txtWindowValue.text = "2. Double-Chop Window: ${TorchDefaults.CHOP_WINDOW_MS} ms"
+            txtAutoOffValue.text = formatAutoOffLabel(TorchDefaults.AUTO_OFF_MINUTES)
+            txtWakeModeValue.text = "4. Standby Mode: ${wakeModeLabels[TorchDefaults.WAKE_MODE]}"
+            sessionPeakAccel = 0f
+            txtLivePeakReadout.text = getString(R.string.live_peak_format, 0f, "Reset")
+            DebugLog.event("sliders_reset", "reason" to "USER_RESTORED_DEFAULTS")
+            Toast.makeText(this, R.string.reset_sliders_done, Toast.LENGTH_SHORT).show()
+        }
 
         // 6. Button to Enable / Add Quick Settings Tile (Android 13+ StatusBarManager API)
         btnAddQsTile.setOnClickListener {
@@ -359,6 +402,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     override fun onResume() {
         super.onResume()
+        if (DeviceEligibility.isMotorolaDevice()) return
         DebugLog.event("ui_resumed", "reason" to "CALIBRATION_READOUT_IS_NOT_GESTURE_ACCEPTANCE")
         refreshServiceSwitch()
         // Heal a service that should be armed but isn't running (force-stop, restored settings, OEM kill)
