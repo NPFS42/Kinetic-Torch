@@ -21,6 +21,7 @@ class DeviceEligibilityTest {
         assertTrue(TorchDefaults.CHOP_WINDOW_MS in 300..1000)
         assertTrue(TorchDefaults.AUTO_OFF_MINUTES in 0..30)
         assertTrue(TorchDefaults.WAKE_MODE in 0..5)
-        assertEquals(800, TorchDefaults.CHOP_WINDOW_MS)
+        assertEquals(12.0f, TorchDefaults.FORCE_THRESHOLD, 0.0001f)
+        assertEquals(750, TorchDefaults.CHOP_WINDOW_MS)
     }
 }
