@@ -54,38 +54,72 @@ class ChopDetector(
      * Feed one gravity-free sample. [nowMs] must be monotonic (SystemClock.elapsedRealtime()).
      * Returns true exactly once when a complete double-chop has just been recognised.
      */
+    data class Trace(
+        val reason: String, val before: String, val after: String,
+        val nowMs: Long, val force: Float, val inPlane: Boolean,
+        val firstChopMs: Long, val lastToggleMs: Long,
+        val threshold: Float, val windowMs: Long, val cooldownRemainingMs: Long,
+        val windowExpired: Boolean, val gestureAgeMs: Long?
+    )
+
+    /** Optional observer; logging exceptions must not alter gesture recognition. */
+    var traceListener: ((Trace) -> Unit)? = null
+    private fun phase() = when {
+        firstChopMs == NONE -> "WAITING_FIRST_CHOP"
+        awaitingValley -> "WAITING_VALLEY"
+        else -> "WAITING_SECOND_CHOP"
+    }
+
     fun onLinearAcceleration(x: Float, y: Float, z: Float, nowMs: Long): Boolean {
-        if (lastToggleMs != NONE && nowMs - lastToggleMs < cooldownMs) return false
-
-        if (firstChopMs != NONE && nowMs - firstChopMs > chopWindowMs) reset()
-
+        val before = phase()
         val force = magnitude(x, y, z)
         val inPlane = isChopPlane(x, y, z)
-
+        val remaining = if (lastToggleMs == NONE) 0L else
+            (cooldownMs - (nowMs - lastToggleMs)).coerceAtLeast(0L)
+        val gestureAgeMs = if (firstChopMs == NONE) null else nowMs - firstChopMs
+        var expired = false
+        fun result(reason: String, accepted: Boolean = false): Boolean {
+            traceListener?.let { listener ->
+                try {
+                    listener(Trace(reason, before, phase(), nowMs, force, inPlane,
+                        firstChopMs, lastToggleMs, forceThreshold, chopWindowMs, remaining, expired, gestureAgeMs))
+                } catch (_: Exception) { /* An observer must never change torch behavior. */ }
+            }
+            return accepted
+        }
+        if (lastToggleMs != NONE && nowMs - lastToggleMs < cooldownMs)
+            return result("COOLDOWN_ACTIVE")
+        if (firstChopMs != NONE && nowMs - firstChopMs > chopWindowMs) {
+            expired = true
+            reset()
+        }
         when {
             firstChopMs == NONE -> {
-                if (inPlane && force >= forceThreshold) {
-                    firstChopMs = nowMs
-                    awaitingValley = true
-                }
+                if (!inPlane) return result("WRONG_MOTION_PLANE")
+                if (force < forceThreshold) return result("BELOW_FORCE_THRESHOLD")
+                firstChopMs = nowMs
+                awaitingValley = true
+                return result("FIRST_CHOP_RECORDED")
             }
             awaitingValley -> {
-                if (force < forceThreshold * VALLEY_RATIO) awaitingValley = false
+                if (force < forceThreshold * VALLEY_RATIO) {
+                    awaitingValley = false
+                    return result("VALLEY_RECORDED")
+                }
+                return result("WAITING_FOR_QUIET_VALLEY")
             }
             else -> {
-                if (inPlane && force >= forceThreshold) {
-                    if (nowMs - firstChopMs >= MIN_SECOND_CHOP_GAP_MS) {
-                        lastToggleMs = nowMs
-                        reset()
-                        return true
-                    } else {
-                        // Deceleration recoil spike from Chop #1 (< 200 ms): require a new valley before Chop #2
-                        awaitingValley = true
-                    }
+                if (!inPlane) return result("WRONG_MOTION_PLANE")
+                if (force < forceThreshold) return result("WAITING_SECOND_CHOP_BELOW_THRESHOLD")
+                if (nowMs - firstChopMs >= MIN_SECOND_CHOP_GAP_MS) {
+                    lastToggleMs = nowMs
+                    reset()
+                    return result("DOUBLE_CHOP_ACCEPTED", true)
                 }
+                awaitingValley = true
+                return result("SECOND_SPIKE_TOO_SOON_RECOIL")
             }
         }
-        return false
     }
 }
 
@@ -122,3 +156,4 @@ class GravityHighPass(
         return nowMs - startMs >= warmupMs
     }
 }
+

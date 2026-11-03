@@ -44,6 +44,7 @@ class ScreenTorchActivity : AppCompatActivity() {
     private val closeReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == ACTION_CLOSE_SCREEN_TORCH) {
+                DebugLog.event("screen_close_received", "reason" to "SERVICE_REQUESTED_CLOSE")
                 closedByService = true
                 finishAndRemoveTask()
             }
@@ -52,6 +53,8 @@ class ScreenTorchActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        DebugLog.start(this)
+        DebugLog.event("screen_activity_created", "reason" to "OS_CREATED_SCREEN_TORCH")
 
         // Edge-to-edge: paint white behind the status bar, nav bar and display cutout
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -85,7 +88,10 @@ class ScreenTorchActivity : AppCompatActivity() {
         val root = FrameLayout(this).apply {
             setBackgroundColor(Color.WHITE)
             keepScreenOn = true
-            setOnClickListener { finishAndRemoveTask() }
+            setOnClickListener {
+                DebugLog.event("screen_tap_off", "reason" to "USER_TAPPED_SCREEN")
+                finishAndRemoveTask()
+            }
         }
 
         val bottomMarginPx = (32 * resources.displayMetrics.density).toInt()
@@ -117,6 +123,7 @@ class ScreenTorchActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         isScreenTorchVisible = true
+        DebugLog.event("screen_activity_visible", "reason" to "ON_RESUME_CONFIRMS_SCREEN_TORCH")
         visibleSinceUptimeMs = SystemClock.elapsedRealtime()
         // Dismiss the high-priority full-screen launch notification once the activity is visible
         getSystemService(NotificationManager::class.java)
@@ -130,6 +137,9 @@ class ScreenTorchActivity : AppCompatActivity() {
         // Guard against the 100-300 ms lock-screen wake lifecycle bounce (onResume -> onStop -> onResume)
         // when waking a sleeping display via fullScreenIntent; only auto-finish once stable for >= 600 ms.
         val awakeDurationMs = SystemClock.elapsedRealtime() - visibleSinceUptimeMs
+        DebugLog.event("screen_activity_stopped", "reason" to "SCREEN_NO_LONGER_VISIBLE",
+            "visible_duration_ms" to awakeDurationMs, "finishing" to isFinishing,
+            "configuration_change" to isChangingConfigurations)
         if (!isFinishing && !isChangingConfigurations && visibleSinceUptimeMs > 0L && awakeDurationMs >= 600L) {
             finishAndRemoveTask()
         }
@@ -137,6 +147,8 @@ class ScreenTorchActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        DebugLog.event("screen_activity_destroyed", "reason" to if (closedByService)
+            "SERVICE_CLOSE" else "ACTIVITY_DISMISSAL", "finishing" to isFinishing)
         isScreenTorchVisible = false
         getSystemService(NotificationManager::class.java)
             ?.cancel(ChopDetectionService.SCREEN_TORCH_NOTIFICATION_ID)
@@ -150,3 +162,4 @@ class ScreenTorchActivity : AppCompatActivity() {
         super.onDestroy()
     }
 }
+

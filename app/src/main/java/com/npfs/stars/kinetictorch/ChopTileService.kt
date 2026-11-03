@@ -14,6 +14,8 @@ class ChopTileService : TileService() {
 
     override fun onClick() {
         super.onClick()
+        DebugLog.start(this)
+        DebugLog.event("tile_clicked", "reason" to "USER_TILE_ARM_TOGGLE")
         val prefs = getSharedPreferences(ChopDetectionService.PREFS_NAME, MODE_PRIVATE)
         val currentlyEnabled = prefs.getBoolean(ChopDetectionService.KEY_SERVICE_ENABLED, false)
         val newState = !currentlyEnabled
@@ -22,10 +24,10 @@ class ChopTileService : TileService() {
 
         val serviceIntent = Intent(this, ChopDetectionService::class.java)
         if (newState) {
-            startForegroundService(serviceIntent)
+            DebugLog.action("tile_start_service") { startForegroundService(serviceIntent) }
         } else {
             // Centralized stopService triggers onDestroy() -> shutdownTorchAndCleanup()
-            stopService(serviceIntent)
+            DebugLog.action("tile_stop_service") { stopService(serviceIntent) }
         }
         syncTileState()
     }
@@ -40,3 +42,4 @@ class ChopTileService : TileService() {
         tile.updateTile()
     }
 }
+

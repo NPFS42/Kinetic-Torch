@@ -1,0 +1,44 @@
+name: Debug logging APK
+on:
+  push:
+    branches: [debug-logging]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  debug-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - name: Use CI JDK and install Android build dependencies
+        run: |
+          rm -f gradle/gradle-daemon-jvm.properties
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Test and assemble diagnostic APK
+        run: gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug
+      - name: Publish debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: kinetic-torch-debug-logging
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+      - name: Publish unit test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-logging-test-results
+          path: |
+            app/build/test-results/testDebugUnitTest/
+            app/build/reports/tests/testDebugUnitTest/
+          if-no-files-found: ignore
+          retention-days: 14

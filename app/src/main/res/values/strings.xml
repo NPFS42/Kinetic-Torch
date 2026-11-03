@@ -7,4 +7,8 @@
     <string name="hardware_status_format">%1$s • %2$s</string>
     <string name="force_threshold_format">1. Chop Force Threshold: %.1f m/s²</string>
     <string name="live_peak_format">Live Chop-Plane Peak: %.1f m/s² [%s]</string>
+    <string name="debug_logging_help">DEBUG LOGGING ACTIVE • Sensor samples, gesture decisions and torch responses stay on this phone. Tap Mark attempt, try the gesture, then export the log. Recent history rotates at about 8 MiB; debug logging uses extra battery.</string>
+    <string name="debug_mark_attempt">Mark test attempt</string>
+    <string name="debug_export_log">Export debug log</string>
 </resources>
+

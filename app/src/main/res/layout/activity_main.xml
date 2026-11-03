@@ -129,5 +129,30 @@
             android:layout_marginTop="8dp"
             android:text="Grant Unrestricted Battery (Samsung / OEM)" />
 
+
+        <LinearLayout
+            android:id="@+id/debugPanel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone"
+            android:layout_marginTop="16dp">
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/debug_logging_help"
+                android:textColor="#FFE082" />
+            <Button
+                android:id="@+id/btnMarkDebugAttempt"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/debug_mark_attempt" />
+            <Button
+                android:id="@+id/btnExportDebugLog"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/debug_export_log" />
+        </LinearLayout>
     </LinearLayout>
 </ScrollView>
+

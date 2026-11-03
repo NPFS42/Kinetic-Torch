@@ -60,8 +60,28 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         "Always-On 24/7 (Continuous Wake Lock — high battery use)"
     )
 
+    private val exportLogLauncher =
+        registerForActivityResult(ActivityResultContracts.CreateDocument("application/x-ndjson")) { uri ->
+            if (uri != null) {
+                DebugLog.event("log_export", "reason" to "USER_REQUESTED_SNAPSHOT")
+                val appContext = applicationContext
+                Thread({
+                    val result = runCatching {
+                        val output = appContext.contentResolver.openOutputStream(uri)
+                            ?: error("Could not open export destination")
+                        output.use { DebugLog.export(it) }
+                    }
+                    runOnUiThread {
+                        Toast.makeText(this, if (result.isSuccess) "Debug log saved. Attach it to the chat."
+                            else "Export failed: ${result.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
+                    }
+                }, "kinetic-log-export").start()
+            }
+        }
+
     private val notificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            DebugLog.event("notification_permission", "reason" to if (granted) "GRANTED" else "DENIED")
             if (!granted) {
                 Toast.makeText(
                     this,
@@ -74,19 +94,22 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
 
     private val serviceToggleListener = CompoundButton.OnCheckedChangeListener { _, checked ->
+        DebugLog.event("ui_arm_toggle", "reason" to if (checked) "USER_ARMED" else "USER_DISARMED")
         prefs.edit { putBoolean(ChopDetectionService.KEY_SERVICE_ENABLED, checked) }
         val intent = Intent(this, ChopDetectionService::class.java)
         if (checked) {
-            startForegroundService(intent)
+            DebugLog.action("ui_start_service") { startForegroundService(intent) }
             requestNotificationPermissionThenPromptFullScreen()
         } else {
             // Calls onDestroy() -> shutdownTorchAndCleanup() to guarantee torch turns off
-            stopService(intent)
+            DebugLog.action("ui_stop_service") { stopService(intent) }
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        DebugLog.start(this)
+        DebugLog.event("ui_created", "reason" to "SETUP_ACTIVITY_STARTED")
 
         // Android 15 enforces edge-to-edge at targetSdk 35: draw behind the bars, then pad by insets
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -122,6 +145,15 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         val btnAddQsTile = findViewById<Button>(R.id.btnAddQuickSettingsTile)
         val btnBatteryExempt = findViewById<Button>(R.id.btnBatteryExemption)
+        findViewById<View>(R.id.debugPanel).visibility = if (BuildConfig.DEBUG) View.VISIBLE else View.GONE
+        findViewById<Button>(R.id.btnExportDebugLog).setOnClickListener {
+            exportLogLauncher.launch("kinetic-torch-debug-${System.currentTimeMillis()}.jsonl")
+        }
+        findViewById<Button>(R.id.btnMarkDebugAttempt).setOnClickListener {
+            DebugLog.event("test_marker", "reason" to "USER_ABOUT_TO_ATTEMPT_DOUBLE_CHOP",
+                "armed_pref" to prefs.getBoolean(ChopDetectionService.KEY_SERVICE_ENABLED, false))
+            Toast.makeText(this, "Attempt marked. Try the double-chop now.", Toast.LENGTH_SHORT).show()
+        }
 
         // Hardware Audit: Check Rear/Front Flash LED and Proximity Sensor presence
         val flashId = ChopDetectionService.findFlashCameraId(cameraManager)
@@ -131,6 +163,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         val ledStatus = if (hasLedFlash) "Rear LED Flash ($flashId)" else "No LED (100% White Screen Torch Active)"
         val proxStatus = if (hasProximity) "Proximity Guard: Ready" else "No Proximity Sensor (Use Screen-Wake Mode)"
         txtHardwareStatus.text = getString(R.string.hardware_status_format, ledStatus, proxStatus)
+        DebugLog.event("ui_hardware", "reason" to "HARDWARE_AUDIT", "flash_id" to flashId,
+            "has_proximity" to hasProximity)
 
         // Full-Screen 100% White Screen Torch Switch (Auto-locked ON if device has no LED).
         // The full-screen-intent permission page is NOT opened here any more: it is requested when the
@@ -228,6 +262,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     Icon.createWithResource(this, R.drawable.ic_chop_torch),
                     Executors.newSingleThreadExecutor()
                 ) { result ->
+                    DebugLog.event("tile_add_result", "result_code" to result)
                     runOnUiThread {
                         when (result) {
                             StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ADDED ->
@@ -268,6 +303,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
      */
     private fun refreshServiceSwitch() {
         val enabled = prefs.getBoolean(ChopDetectionService.KEY_SERVICE_ENABLED, false)
+        DebugLog.event("ui_arm_state", "reason" to "PREFERENCE_STATE_NOT_SERVICE_LIVENESS", "armed_pref" to enabled)
         switchService.setOnCheckedChangeListener(null)
         switchService.isChecked = enabled
         switchService.setOnCheckedChangeListener(serviceToggleListener)
@@ -290,6 +326,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
      * Automatic prompts happen at most once; [force] is for an explicit user action.
      */
     private fun promptFullScreenIntentPermissionIfNeeded(force: Boolean) {
+        DebugLog.event("full_screen_permission_check", "forced" to force,
+            "sdk" to Build.VERSION.SDK_INT, "screen_fallback_setting" to
+                prefs.getBoolean(ChopDetectionService.KEY_USE_SCREEN_TORCH, false))
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return
         val screenTorchInUse = !hasLedFlash ||
                 prefs.getBoolean(ChopDetectionService.KEY_USE_SCREEN_TORCH, false)
@@ -304,7 +343,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
         try {
             startActivity(intent)
-        } catch (_: Exception) {}
+        } catch (error: Exception) {
+            DebugLog.event("settings_launch_failed", "exception" to error.javaClass.simpleName,
+                "message" to error.message)
+        }
     }
 
     private fun formatAutoOffLabel(minutes: Int): String {
@@ -317,10 +359,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     override fun onResume() {
         super.onResume()
+        DebugLog.event("ui_resumed", "reason" to "CALIBRATION_READOUT_IS_NOT_GESTURE_ACCEPTANCE")
         refreshServiceSwitch()
         // Heal a service that should be armed but isn't running (force-stop, restored settings, OEM kill)
         if (prefs.getBoolean(ChopDetectionService.KEY_SERVICE_ENABLED, false)) {
-            startForegroundService(Intent(this, ChopDetectionService::class.java))
+            DebugLog.action("ui_resume_rearm") { startForegroundService(Intent(this, ChopDetectionService::class.java)) }
         }
 
         sessionPeakAccel = 0.0f
@@ -333,6 +376,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
 
     override fun onPause() {
+        DebugLog.event("ui_paused", "reason" to "CALIBRATION_SENSOR_UNREGISTERED")
         sensorManager.unregisterListener(this)
         super.onPause()
     }
@@ -343,6 +387,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         if (type != Sensor.TYPE_LINEAR_ACCELERATION && type != Sensor.TYPE_ACCELEROMETER) return
 
         val v = event.values
+        DebugLog.event("ui_motion_sample", "sensor_type" to type, "sensor_timestamp_ns" to event.timestamp,
+            "x" to v[0], "y" to v[1], "z" to v[2],
+            "armed_pref" to prefs.getBoolean(ChopDetectionService.KEY_SERVICE_ENABLED, false))
         val lin = linearBuffer
         if (type == Sensor.TYPE_LINEAR_ACCELERATION) {
             lin[0] = v[0]; lin[1] = v[1]; lin[2] = v[2]
@@ -355,7 +402,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         val force = ChopDetector.magnitude(lin[0], lin[1], lin[2])
         if (force > sessionPeakAccel) {
             sessionPeakAccel = force
-            val status = if (sessionPeakAccel >= currentThreshold) "PASS (Triggers Chop)" else "Below Threshold"
+            val status = if (sessionPeakAccel >= currentThreshold) "Above threshold only; full gesture not confirmed" else "Below threshold"
             txtLivePeakReadout.text = getString(
                 R.string.live_peak_format,
                 sessionPeakAccel,
@@ -366,3 +413,4 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 }
+

@@ -149,3 +149,4 @@ class GravityHighPassTest {
         assertFalse(filter.filter(0f, 0f, 9.81f, t, out))
     }
 }
+

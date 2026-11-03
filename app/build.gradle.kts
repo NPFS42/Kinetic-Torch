@@ -24,7 +24,13 @@ android {
         }
     }
 
+    buildFeatures { buildConfig = true }
+
     buildTypes {
+        debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug-logging"
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -51,3 +57,4 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
 }
+
