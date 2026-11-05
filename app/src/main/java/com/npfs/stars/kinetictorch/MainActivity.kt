@@ -112,16 +112,26 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         DebugLog.start(this)
         DebugLog.event("ui_created", "reason" to "SETUP_ACTIVITY_STARTED")
 
-        // Android 15 enforces edge-to-edge at targetSdk 35: draw behind the bars, then pad by insets
+        // Android 15+ draws edge-to-edge. Keep interactive settings entirely inside the
+        // status bar, navigation/gesture bar, and display-cutout safe areas.
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_main)
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById<View>(R.id.rootScroll)) { v, insets ->
-            val bars = insets.getInsets(
+        val settingsScroll = findViewById<View>(R.id.rootScroll)
+        val initialPadding = intArrayOf(
+            settingsScroll.paddingLeft, settingsScroll.paddingTop,
+            settingsScroll.paddingRight, settingsScroll.paddingBottom
+        )
+        ViewCompat.setOnApplyWindowInsetsListener(settingsScroll) { view, insets ->
+            val safe = insets.getInsets(
                 WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
             )
-            v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+            view.setPadding(
+                initialPadding[0] + safe.left, initialPadding[1] + safe.top,
+                initialPadding[2] + safe.right, initialPadding[3] + safe.bottom
+            )
             insets
         }
+        ViewCompat.requestApplyInsets(settingsScroll)
 
         prefs = getSharedPreferences(ChopDetectionService.PREFS_NAME, MODE_PRIVATE)
         sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
