@@ -22,6 +22,13 @@ internal object TorchHapticPatterns {
     // Only the OFF effect is made explicit; preserve the previously working double-ON pattern.
     fun deactivationAmplitudes(): IntArray = intArrayOf(0, DEACTIVATION_AMPLITUDE)
 
+    /**
+     * TEST ONLY: reproduce the proven ON waveform exactly on an OFF transition.
+     * If this stays silent, the difference is not one-shot vs waveform shape.
+     * Never use this temporary two-pulse OFF probe in production.
+     */
+    fun diagnosticOffProbeTimingsMs(): LongArray = activationTimingsMs()
+
     fun shouldDeliverConfirmedOff(
         confirmedLedState: Boolean?, torchActive: Boolean,
         requestId: Long, latestRequestId: Long
