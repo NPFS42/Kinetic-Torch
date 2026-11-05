@@ -5,34 +5,53 @@ plugins {
 
 android {
     namespace = "com.npfs.stars.kinetictorch"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.npfs.stars.kinetictorch"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 4
-        versionName = "1.3.0"
+        targetSdk = 36
+        versionCode = 18
+        versionName = "1.3.3"
+        buildConfigField("boolean", "DIAGNOSTICS_ENABLED", "false")
     }
 
-    signingConfigs {
-        create("release") {
-            storeFile = file("release.jks")
-            storePassword = "android"
-            keyAlias = "kinetictorch"
-            keyPassword = "android"
+    // Use the existing shop upload/release key without committing any signing material.
+    val keyPath = System.getenv("KINETIC_KEYSTORE_PATH")
+    if (!keyPath.isNullOrBlank()) {
+        signingConfigs {
+            create("release") {
+                storeFile = file(keyPath)
+                storePassword = requireNotNull(System.getenv("KINETIC_KEYSTORE_PASSWORD"))
+                keyAlias = requireNotNull(System.getenv("KINETIC_KEY_ALIAS"))
+                keyPassword = requireNotNull(System.getenv("KINETIC_KEY_PASSWORD"))
+            }
         }
     }
 
+    buildFeatures { buildConfig = true }
+
     buildTypes {
+        debug {
+            buildConfigField("boolean", "DIAGNOSTICS_ENABLED", "true")
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = signingConfigs.findByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+        create("diagnostic") {
+            initWith(getByName("release"))
+            isDebuggable = false
+            versionNameSuffix = "-diagnostic"
+            buildConfigField("boolean", "DIAGNOSTICS_ENABLED", "true")
+            matchingFallbacks += listOf("release")
         }
     }
     compileOptions {
@@ -51,3 +70,4 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
 }
+

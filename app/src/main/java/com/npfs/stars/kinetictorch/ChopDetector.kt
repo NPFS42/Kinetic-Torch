@@ -10,17 +10,27 @@ import kotlin.math.sqrt
  * Sensor.TYPE_LINEAR_ACCELERATION or from [GravityHighPass] applied to the raw accelerometer.
  * Deliberately has no Android imports so it can be unit-tested on the plain JVM.
  *
- * Gesture: spike >= threshold -> quiet valley (< threshold * 0.45) -> second spike >= threshold,
- * with the second spike at least [MIN_SECOND_CHOP_GAP_MS] and at most [chopWindowMs] after the first.
+ * Gesture: spike >= threshold -> reduced-motion valley (< threshold * 0.80) -> second spike >= threshold,
+ * with the second spike at least [MIN_SECOND_CHOP_GAP_MS] and within the active window after the first.
+ * Turning a light OFF is intentionally more forgiving, while first activation remains conservative.
  */
 class ChopDetector(
-    var forceThreshold: Float = 18.5f,
-    var chopWindowMs: Long = 650L,
-    var cooldownMs: Long = 1000L
+    var forceThreshold: Float = TorchDefaults.FORCE_THRESHOLD,
+    var chopWindowMs: Long = TorchDefaults.CHOP_WINDOW_MS.toLong(),
+    var cooldownMs: Long = TorchDefaults.COOLDOWN_MS.toLong()
 ) {
     companion object {
-        /** Valley must drop below this fraction of the threshold between the two chops. */
-        const val VALLEY_RATIO = 0.45f
+        /**
+         * The original 45% valley required motion below 5.4 m/s² at a 12 m/s² setting.
+         * On-device recordings showed the majority of missed-valley minima above that.
+         * An 80% dip criterion (9.6 m/s² on the default ON setting) captures just over
+         * half of those misses, while retaining the 200 ms recoil guard.
+         */
+        const val VALLEY_RATIO = 0.80f
+
+        /** OFF is easier than ON: 75% force requirement, plus a 250 ms timing grace. */
+        const val OFF_FORCE_MULTIPLIER = 0.75f
+        const val OFF_WINDOW_EXTENSION_MS = 250L
 
         /**
          * A single physical chop produces an accelerate spike and a decelerate spike ~100-150 ms
@@ -30,6 +40,10 @@ class ChopDetector(
 
         /** In-plane (x/y) motion must be at least this fraction of z motion to count as a chop. */
         const val PLANE_RATIO = 0.7f
+
+        /** Pocket guard must block ON but must never prevent shutting a lit torch OFF. */
+        fun shouldBlockByProximity(pocketCovered: Boolean, torchIsOn: Boolean): Boolean =
+            pocketCovered && !torchIsOn
 
         private const val NONE = -1L
 
@@ -54,38 +68,78 @@ class ChopDetector(
      * Feed one gravity-free sample. [nowMs] must be monotonic (SystemClock.elapsedRealtime()).
      * Returns true exactly once when a complete double-chop has just been recognised.
      */
-    fun onLinearAcceleration(x: Float, y: Float, z: Float, nowMs: Long): Boolean {
-        if (lastToggleMs != NONE && nowMs - lastToggleMs < cooldownMs) return false
+    data class Trace(
+        val reason: String, val before: String, val after: String,
+        val nowMs: Long, val force: Float, val inPlane: Boolean,
+        val firstChopMs: Long, val lastToggleMs: Long,
+        val threshold: Float, val windowMs: Long, val cooldownRemainingMs: Long,
+        val windowExpired: Boolean, val gestureAgeMs: Long?, val torchIsOn: Boolean
+    )
 
-        if (firstChopMs != NONE && nowMs - firstChopMs > chopWindowMs) reset()
+    /** Optional observer; logging exceptions must not alter gesture recognition. */
+    var traceListener: ((Trace) -> Unit)? = null
+    private fun phase() = when {
+        firstChopMs == NONE -> "WAITING_FIRST_CHOP"
+        awaitingValley -> "WAITING_VALLEY"
+        else -> "WAITING_SECOND_CHOP"
+    }
 
+    fun onLinearAcceleration(
+        x: Float, y: Float, z: Float, nowMs: Long,
+        torchIsOn: Boolean = false
+    ): Boolean {
+        val before = phase()
         val force = magnitude(x, y, z)
         val inPlane = isChopPlane(x, y, z)
-
+        val effectiveThreshold = if (torchIsOn) forceThreshold * OFF_FORCE_MULTIPLIER else forceThreshold
+        val effectiveWindowMs = if (torchIsOn) chopWindowMs + OFF_WINDOW_EXTENSION_MS else chopWindowMs
+        val remaining = if (lastToggleMs == NONE) 0L else
+            (cooldownMs - (nowMs - lastToggleMs)).coerceAtLeast(0L)
+        val gestureAgeMs = if (firstChopMs == NONE) null else nowMs - firstChopMs
+        var expired = false
+        fun result(reason: String, accepted: Boolean = false): Boolean {
+            traceListener?.let { listener ->
+                try {
+                    listener(Trace(reason, before, phase(), nowMs, force, inPlane,
+                        firstChopMs, lastToggleMs, effectiveThreshold, effectiveWindowMs,
+                        remaining, expired, gestureAgeMs, torchIsOn))
+                } catch (_: Exception) { /* An observer must never change torch behavior. */ }
+            }
+            return accepted
+        }
+        if (lastToggleMs != NONE && nowMs - lastToggleMs < cooldownMs)
+            return result("COOLDOWN_ACTIVE")
+        if (firstChopMs != NONE && nowMs - firstChopMs > effectiveWindowMs) {
+            expired = true
+            reset()
+        }
         when {
             firstChopMs == NONE -> {
-                if (inPlane && force >= forceThreshold) {
-                    firstChopMs = nowMs
-                    awaitingValley = true
-                }
+                if (!inPlane) return result("WRONG_MOTION_PLANE")
+                if (force < effectiveThreshold) return result("BELOW_FORCE_THRESHOLD")
+                firstChopMs = nowMs
+                awaitingValley = true
+                return result("FIRST_CHOP_RECORDED")
             }
             awaitingValley -> {
-                if (force < forceThreshold * VALLEY_RATIO) awaitingValley = false
+                if (force < effectiveThreshold * VALLEY_RATIO) {
+                    awaitingValley = false
+                    return result("VALLEY_RECORDED")
+                }
+                return result("WAITING_FOR_QUIET_VALLEY")
             }
             else -> {
-                if (inPlane && force >= forceThreshold) {
-                    if (nowMs - firstChopMs >= MIN_SECOND_CHOP_GAP_MS) {
-                        lastToggleMs = nowMs
-                        reset()
-                        return true
-                    } else {
-                        // Deceleration recoil spike from Chop #1 (< 200 ms): require a new valley before Chop #2
-                        awaitingValley = true
-                    }
+                if (!inPlane) return result("WRONG_MOTION_PLANE")
+                if (force < effectiveThreshold) return result("WAITING_SECOND_CHOP_BELOW_THRESHOLD")
+                if (nowMs - firstChopMs >= MIN_SECOND_CHOP_GAP_MS) {
+                    lastToggleMs = nowMs
+                    reset()
+                    return result("DOUBLE_CHOP_ACCEPTED", true)
                 }
+                awaitingValley = true
+                return result("SECOND_SPIKE_TOO_SOON_RECOIL")
             }
         }
-        return false
     }
 }
 
@@ -122,3 +176,4 @@ class GravityHighPass(
         return nowMs - startMs >= warmupMs
     }
 }
+

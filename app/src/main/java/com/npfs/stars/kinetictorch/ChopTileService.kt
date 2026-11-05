@@ -3,6 +3,7 @@ package com.npfs.stars.kinetictorch
 import android.content.Intent
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
+import android.widget.Toast
 import androidx.core.content.edit
 
 class ChopTileService : TileService() {
@@ -14,6 +15,17 @@ class ChopTileService : TileService() {
 
     override fun onClick() {
         super.onClick()
+        DebugLog.start(this)
+        DebugLog.event("tile_clicked", "reason" to "USER_TILE_ARM_TOGGLE")
+        if (DeviceEligibility.isMotorolaDevice()) {
+            getSharedPreferences(ChopDetectionService.PREFS_NAME, MODE_PRIVATE).edit {
+                putBoolean(ChopDetectionService.KEY_SERVICE_ENABLED, false)
+            }
+            stopService(Intent(this, ChopDetectionService::class.java))
+            Toast.makeText(this, R.string.motorola_excluded_message, Toast.LENGTH_LONG).show()
+            syncTileState()
+            return
+        }
         val prefs = getSharedPreferences(ChopDetectionService.PREFS_NAME, MODE_PRIVATE)
         val currentlyEnabled = prefs.getBoolean(ChopDetectionService.KEY_SERVICE_ENABLED, false)
         val newState = !currentlyEnabled
@@ -22,16 +34,22 @@ class ChopTileService : TileService() {
 
         val serviceIntent = Intent(this, ChopDetectionService::class.java)
         if (newState) {
-            startForegroundService(serviceIntent)
+            DebugLog.action("tile_start_service") { startForegroundService(serviceIntent) }
         } else {
             // Centralized stopService triggers onDestroy() -> shutdownTorchAndCleanup()
-            stopService(serviceIntent)
+            DebugLog.action("tile_stop_service") { stopService(serviceIntent) }
         }
         syncTileState()
     }
 
     private fun syncTileState() {
         val tile = qsTile ?: return
+        if (DeviceEligibility.isMotorolaDevice()) {
+            tile.state = Tile.STATE_UNAVAILABLE
+            tile.label = getString(R.string.motorola_tile_label)
+            tile.updateTile()
+            return
+        }
         val prefs = getSharedPreferences(ChopDetectionService.PREFS_NAME, MODE_PRIVATE)
         val enabled = prefs.getBoolean(ChopDetectionService.KEY_SERVICE_ENABLED, false)
 
@@ -40,3 +58,4 @@ class ChopTileService : TileService() {
         tile.updateTile()
     }
 }
+

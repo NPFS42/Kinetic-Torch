@@ -45,7 +45,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var switchService: MaterialSwitch
     private var hasLedFlash = false
     private var sessionPeakAccel = 0.0f
-    private var currentThreshold = 18.5f
+    private var currentThreshold = TorchDefaults.FORCE_THRESHOLD
+    private var suppressSliderWrites = false
 
     // Same motion pipeline as ChopDetectionService, so the live readout matches what triggers a chop
     private val gravityFilter = GravityHighPass()
@@ -60,8 +61,28 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         "Always-On 24/7 (Continuous Wake Lock — high battery use)"
     )
 
+    private val exportLogLauncher =
+        registerForActivityResult(ActivityResultContracts.CreateDocument("application/x-ndjson")) { uri ->
+            if (uri != null) {
+                DebugLog.event("log_export", "reason" to "USER_REQUESTED_SNAPSHOT")
+                val appContext = applicationContext
+                Thread({
+                    val result = runCatching {
+                        val output = appContext.contentResolver.openOutputStream(uri)
+                            ?: error("Could not open export destination")
+                        output.use { DebugLog.export(it) }
+                    }
+                    runOnUiThread {
+                        Toast.makeText(this, if (result.isSuccess) "Debug log saved. Attach it to the chat."
+                            else "Export failed: ${result.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
+                    }
+                }, "kinetic-log-export").start()
+            }
+        }
+
     private val notificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            DebugLog.event("notification_permission", "reason" to if (granted) "GRANTED" else "DENIED")
             if (!granted) {
                 Toast.makeText(
                     this,
@@ -74,34 +95,60 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
 
     private val serviceToggleListener = CompoundButton.OnCheckedChangeListener { _, checked ->
+        DebugLog.event("ui_arm_toggle", "reason" to if (checked) "USER_ARMED" else "USER_DISARMED")
         prefs.edit { putBoolean(ChopDetectionService.KEY_SERVICE_ENABLED, checked) }
         val intent = Intent(this, ChopDetectionService::class.java)
         if (checked) {
-            startForegroundService(intent)
+            DebugLog.action("ui_start_service") { startForegroundService(intent) }
             requestNotificationPermissionThenPromptFullScreen()
         } else {
             // Calls onDestroy() -> shutdownTorchAndCleanup() to guarantee torch turns off
-            stopService(intent)
+            DebugLog.action("ui_stop_service") { stopService(intent) }
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        DebugLog.start(this)
+        DebugLog.event("ui_created", "reason" to "SETUP_ACTIVITY_STARTED")
 
-        // Android 15 enforces edge-to-edge at targetSdk 35: draw behind the bars, then pad by insets
+        // Android 15+ draws edge-to-edge. Keep interactive settings entirely inside the
+        // status bar, navigation/gesture bar, and display-cutout safe areas.
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_main)
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById<View>(R.id.rootScroll)) { v, insets ->
-            val bars = insets.getInsets(
+        val settingsScroll = findViewById<View>(R.id.rootScroll)
+        val initialPadding = intArrayOf(
+            settingsScroll.paddingLeft, settingsScroll.paddingTop,
+            settingsScroll.paddingRight, settingsScroll.paddingBottom
+        )
+        ViewCompat.setOnApplyWindowInsetsListener(settingsScroll) { view, insets ->
+            val safe = insets.getInsets(
                 WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
             )
-            v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+            view.setPadding(
+                initialPadding[0] + safe.left, initialPadding[1] + safe.top,
+                initialPadding[2] + safe.right, initialPadding[3] + safe.bottom
+            )
             insets
         }
+        ViewCompat.requestApplyInsets(settingsScroll)
 
         prefs = getSharedPreferences(ChopDetectionService.PREFS_NAME, MODE_PRIVATE)
         sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
         cameraManager = getSystemService(CAMERA_SERVICE) as CameraManager
+
+        // Defense in depth: Play Console model exclusions alone do not block sideloaded installs.
+        if (DeviceEligibility.isMotorolaDevice()) {
+            prefs.edit { putBoolean(ChopDetectionService.KEY_SERVICE_ENABLED, false) }
+            stopService(Intent(this, ChopDetectionService::class.java))
+            androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle(R.string.motorola_excluded_title)
+                .setMessage(R.string.motorola_excluded_message)
+                .setCancelable(false)
+                .setPositiveButton(android.R.string.ok) { _, _ -> finish() }
+                .show()
+            return
+        }
 
         val txtHardwareStatus = findViewById<TextView>(R.id.txtHardwareStatus)
         txtLivePeakReadout = findViewById(R.id.txtLivePeakReadout)
@@ -120,8 +167,18 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         val seekWakeMode = findViewById<SeekBar>(R.id.seekWakeMode)
         val txtWakeModeValue = findViewById<TextView>(R.id.txtWakeModeValue)
 
+        val btnResetSliders = findViewById<Button>(R.id.btnResetSliders)
         val btnAddQsTile = findViewById<Button>(R.id.btnAddQuickSettingsTile)
         val btnBatteryExempt = findViewById<Button>(R.id.btnBatteryExemption)
+        findViewById<View>(R.id.debugPanel).visibility = if (BuildConfig.DIAGNOSTICS_ENABLED) View.VISIBLE else View.GONE
+        findViewById<Button>(R.id.btnExportDebugLog).setOnClickListener {
+            exportLogLauncher.launch("kinetic-torch-debug-${System.currentTimeMillis()}.jsonl")
+        }
+        findViewById<Button>(R.id.btnMarkDebugAttempt).setOnClickListener {
+            DebugLog.event("test_marker", "reason" to "USER_ABOUT_TO_ATTEMPT_DOUBLE_CHOP",
+                "armed_pref" to prefs.getBoolean(ChopDetectionService.KEY_SERVICE_ENABLED, false))
+            Toast.makeText(this, "Attempt marked. Try the double-chop now.", Toast.LENGTH_SHORT).show()
+        }
 
         // Hardware Audit: Check Rear/Front Flash LED and Proximity Sensor presence
         val flashId = ChopDetectionService.findFlashCameraId(cameraManager)
@@ -131,6 +188,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         val ledStatus = if (hasLedFlash) "Rear LED Flash ($flashId)" else "No LED (100% White Screen Torch Active)"
         val proxStatus = if (hasProximity) "Proximity Guard: Ready" else "No Proximity Sensor (Use Screen-Wake Mode)"
         txtHardwareStatus.text = getString(R.string.hardware_status_format, ledStatus, proxStatus)
+        DebugLog.event("ui_hardware", "reason" to "HARDWARE_AUDIT", "flash_id" to flashId,
+            "has_proximity" to hasProximity)
 
         // Full-Screen 100% White Screen Torch Switch (Auto-locked ON if device has no LED).
         // The full-screen-intent permission page is NOT opened here any more: it is requested when the
@@ -154,7 +213,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         refreshServiceSwitch()
 
         // 2. Chop Force Threshold Slider (10.0 to 35.0 m/s^2, mapped as progress 0..250)
-        currentThreshold = prefs.getFloat(ChopDetectionService.KEY_FORCE_THRESHOLD, 18.5f)
+        currentThreshold = prefs.getFloat(ChopDetectionService.KEY_FORCE_THRESHOLD, TorchDefaults.FORCE_THRESHOLD)
         seekForce.max = 250
         seekForce.progress = ((currentThreshold - 10.0f) * 10).toInt().coerceIn(0, 250)
         txtForceValue.text = getString(R.string.force_threshold_format, currentThreshold)
@@ -163,7 +222,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 currentThreshold = 10.0f + (progress / 10.0f)
                 txtForceValue.text = getString(R.string.force_threshold_format, currentThreshold)
-                prefs.edit { putFloat(ChopDetectionService.KEY_FORCE_THRESHOLD, currentThreshold) }
+                if (!suppressSliderWrites) prefs.edit { putFloat(ChopDetectionService.KEY_FORCE_THRESHOLD, currentThreshold) }
                 sessionPeakAccel = 0.0f
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
@@ -171,7 +230,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         })
 
         // 3. Double-Chop Time Window Slider (300 ms to 1000 ms, mapped as progress 0..700)
-        val savedWindow = prefs.getInt(ChopDetectionService.KEY_CHOP_WINDOW_MS, 650)
+        val savedWindow = prefs.getInt(ChopDetectionService.KEY_CHOP_WINDOW_MS, TorchDefaults.CHOP_WINDOW_MS)
         seekWindow.max = 700
         seekWindow.progress = (savedWindow - 300).coerceIn(0, 700)
         txtWindowValue.text = "2. Double-Chop Window: ${savedWindow} ms"
@@ -180,14 +239,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 val windowMs = 300 + progress
                 txtWindowValue.text = "2. Double-Chop Window: ${windowMs} ms"
-                prefs.edit { putInt(ChopDetectionService.KEY_CHOP_WINDOW_MS, windowMs) }
+                if (!suppressSliderWrites) prefs.edit { putInt(ChopDetectionService.KEY_CHOP_WINDOW_MS, windowMs) }
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
 
         // 4. Auto-Shutoff Safety Timer Slider (0 = Disabled, 1 to 30 minutes)
-        val savedAutoOff = prefs.getInt(ChopDetectionService.KEY_AUTO_OFF_MINUTES, 10)
+        val savedAutoOff = prefs.getInt(ChopDetectionService.KEY_AUTO_OFF_MINUTES, TorchDefaults.AUTO_OFF_MINUTES)
         seekAutoOff.max = 30
         seekAutoOff.progress = savedAutoOff.coerceIn(0, 30)
         txtAutoOffValue.text = formatAutoOffLabel(savedAutoOff)
@@ -195,14 +254,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         seekAutoOff.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 txtAutoOffValue.text = formatAutoOffLabel(progress)
-                prefs.edit { putInt(ChopDetectionService.KEY_AUTO_OFF_MINUTES, progress) }
+                if (!suppressSliderWrites) prefs.edit { putInt(ChopDetectionService.KEY_AUTO_OFF_MINUTES, progress) }
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
 
         // 5. Standby Power Mode Slider (0 = Screen-On Only .. 2 = Screen-Wake + 30s .. 5 = Always-On 24/7)
-        val savedWakeMode = prefs.getInt(ChopDetectionService.KEY_WAKE_MODE, 2).coerceIn(0, 5)
+        val savedWakeMode = prefs.getInt(ChopDetectionService.KEY_WAKE_MODE, TorchDefaults.WAKE_MODE).coerceIn(0, 5)
         seekWakeMode.max = 5
         seekWakeMode.progress = savedWakeMode
         txtWakeModeValue.text = "4. Standby Mode: ${wakeModeLabels[savedWakeMode]}"
@@ -211,11 +270,39 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 val mode = progress.coerceIn(0, 5)
                 txtWakeModeValue.text = "4. Standby Mode: ${wakeModeLabels[mode]}"
-                prefs.edit { putInt(ChopDetectionService.KEY_WAKE_MODE, mode) }
+                if (!suppressSliderWrites) prefs.edit { putInt(ChopDetectionService.KEY_WAKE_MODE, mode) }
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
+
+        // Restore only the four visible sliders. Never disarm the service or wipe other settings.
+        btnResetSliders.setOnClickListener {
+            prefs.edit {
+                putFloat(ChopDetectionService.KEY_FORCE_THRESHOLD, TorchDefaults.FORCE_THRESHOLD)
+                putInt(ChopDetectionService.KEY_CHOP_WINDOW_MS, TorchDefaults.CHOP_WINDOW_MS)
+                putInt(ChopDetectionService.KEY_AUTO_OFF_MINUTES, TorchDefaults.AUTO_OFF_MINUTES)
+                putInt(ChopDetectionService.KEY_WAKE_MODE, TorchDefaults.WAKE_MODE)
+            }
+            suppressSliderWrites = true
+            try {
+                currentThreshold = TorchDefaults.FORCE_THRESHOLD
+                seekForce.progress = ((TorchDefaults.FORCE_THRESHOLD - 10.0f) * 10).toInt()
+                seekWindow.progress = TorchDefaults.CHOP_WINDOW_MS - 300
+                seekAutoOff.progress = TorchDefaults.AUTO_OFF_MINUTES
+                seekWakeMode.progress = TorchDefaults.WAKE_MODE
+            } finally {
+                suppressSliderWrites = false
+            }
+            txtForceValue.text = getString(R.string.force_threshold_format, TorchDefaults.FORCE_THRESHOLD)
+            txtWindowValue.text = "2. Double-Chop Window: ${TorchDefaults.CHOP_WINDOW_MS} ms"
+            txtAutoOffValue.text = formatAutoOffLabel(TorchDefaults.AUTO_OFF_MINUTES)
+            txtWakeModeValue.text = "4. Standby Mode: ${wakeModeLabels[TorchDefaults.WAKE_MODE]}"
+            sessionPeakAccel = 0f
+            txtLivePeakReadout.text = getString(R.string.live_peak_format, 0f, "Reset")
+            DebugLog.event("sliders_reset", "reason" to "USER_RESTORED_DEFAULTS")
+            Toast.makeText(this, R.string.reset_sliders_done, Toast.LENGTH_SHORT).show()
+        }
 
         // 6. Button to Enable / Add Quick Settings Tile (Android 13+ StatusBarManager API)
         btnAddQsTile.setOnClickListener {
@@ -228,6 +315,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     Icon.createWithResource(this, R.drawable.ic_chop_torch),
                     Executors.newSingleThreadExecutor()
                 ) { result ->
+                    DebugLog.event("tile_add_result", "result_code" to result)
                     runOnUiThread {
                         when (result) {
                             StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ADDED ->
@@ -268,6 +356,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
      */
     private fun refreshServiceSwitch() {
         val enabled = prefs.getBoolean(ChopDetectionService.KEY_SERVICE_ENABLED, false)
+        DebugLog.event("ui_arm_state", "reason" to "PREFERENCE_STATE_NOT_SERVICE_LIVENESS", "armed_pref" to enabled)
         switchService.setOnCheckedChangeListener(null)
         switchService.isChecked = enabled
         switchService.setOnCheckedChangeListener(serviceToggleListener)
@@ -290,6 +379,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
      * Automatic prompts happen at most once; [force] is for an explicit user action.
      */
     private fun promptFullScreenIntentPermissionIfNeeded(force: Boolean) {
+        DebugLog.event("full_screen_permission_check", "forced" to force,
+            "sdk" to Build.VERSION.SDK_INT, "screen_fallback_setting" to
+                prefs.getBoolean(ChopDetectionService.KEY_USE_SCREEN_TORCH, false))
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return
         val screenTorchInUse = !hasLedFlash ||
                 prefs.getBoolean(ChopDetectionService.KEY_USE_SCREEN_TORCH, false)
@@ -304,7 +396,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
         try {
             startActivity(intent)
-        } catch (_: Exception) {}
+        } catch (error: Exception) {
+            DebugLog.event("settings_launch_failed", "exception" to error.javaClass.simpleName,
+                "message" to error.message)
+        }
     }
 
     private fun formatAutoOffLabel(minutes: Int): String {
@@ -317,10 +412,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     override fun onResume() {
         super.onResume()
+        if (DeviceEligibility.isMotorolaDevice()) return
+        DebugLog.event("ui_resumed", "reason" to "CALIBRATION_READOUT_IS_NOT_GESTURE_ACCEPTANCE")
         refreshServiceSwitch()
         // Heal a service that should be armed but isn't running (force-stop, restored settings, OEM kill)
         if (prefs.getBoolean(ChopDetectionService.KEY_SERVICE_ENABLED, false)) {
-            startForegroundService(Intent(this, ChopDetectionService::class.java))
+            DebugLog.action("ui_resume_rearm") { startForegroundService(Intent(this, ChopDetectionService::class.java)) }
         }
 
         sessionPeakAccel = 0.0f
@@ -333,6 +430,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
 
     override fun onPause() {
+        DebugLog.event("ui_paused", "reason" to "CALIBRATION_SENSOR_UNREGISTERED")
         sensorManager.unregisterListener(this)
         super.onPause()
     }
@@ -343,6 +441,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         if (type != Sensor.TYPE_LINEAR_ACCELERATION && type != Sensor.TYPE_ACCELEROMETER) return
 
         val v = event.values
+        DebugLog.event("ui_motion_sample", "sensor_type" to type, "sensor_timestamp_ns" to event.timestamp,
+            "x" to v[0], "y" to v[1], "z" to v[2],
+            "armed_pref" to prefs.getBoolean(ChopDetectionService.KEY_SERVICE_ENABLED, false))
         val lin = linearBuffer
         if (type == Sensor.TYPE_LINEAR_ACCELERATION) {
             lin[0] = v[0]; lin[1] = v[1]; lin[2] = v[2]
@@ -355,7 +456,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         val force = ChopDetector.magnitude(lin[0], lin[1], lin[2])
         if (force > sessionPeakAccel) {
             sessionPeakAccel = force
-            val status = if (sessionPeakAccel >= currentThreshold) "PASS (Triggers Chop)" else "Below Threshold"
+            val status = if (sessionPeakAccel >= currentThreshold) "Above threshold only; full gesture not confirmed" else "Below threshold"
             txtLivePeakReadout.text = getString(
                 R.string.live_peak_format,
                 sessionPeakAccel,
@@ -366,3 +467,4 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 }
+

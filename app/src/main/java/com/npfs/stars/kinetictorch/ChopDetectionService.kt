@@ -25,6 +25,7 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
+import android.os.VibrationAttributes
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -48,8 +49,8 @@ class ChopDetectionService : Service(), SensorEventListener {
         const val PREFS_NAME = "KineticTorchPrefs"
         const val KEY_SERVICE_ENABLED = "service_enabled"
         const val KEY_USE_SCREEN_TORCH = "use_screen_torch"     // Full-screen 100% white mode
-        const val KEY_FORCE_THRESHOLD = "force_threshold"       // Default: 18.5 m/s^2 (10.0..35.0)
-        const val KEY_CHOP_WINDOW_MS = "chop_window_ms"         // Default: 650 ms (300..1000)
+        const val KEY_FORCE_THRESHOLD = "force_threshold"       // Default from TorchDefaults (10.0..35.0)
+        const val KEY_CHOP_WINDOW_MS = "chop_window_ms"         // Default from TorchDefaults (300..1000)
         const val KEY_AUTO_OFF_MINUTES = "auto_off_minutes"     // Default: 10 min (0 = Disabled, 1..30)
         const val KEY_WAKE_MODE = "wake_mode"                   // 0=ScreenOn, 1=15s, 2=30s(Def), 3=2m, 4=10m, 5=AlwaysOn 24/7
         const val KEY_COOLDOWN_MS = "cooldown_ms"               // Default: 1000 ms
@@ -129,6 +130,33 @@ class ChopDetectionService : Service(), SensorEventListener {
 
     // Gesture recognition (monotonic SystemClock.elapsedRealtime timestamps) lives in ChopDetector;
     // threshold / window / cooldown are pushed into it from prefs.
+    private var lastMotionElapsedMs: Long? = null
+    private val diagnosticHeartbeat = object : Runnable {
+        override fun run() {
+            trace("service_heartbeat", "SERVICE_ALIVE", "last_motion_elapsed_ms" to lastMotionElapsedMs,
+                "motion_age_ms" to lastMotionElapsedMs?.let { SystemClock.elapsedRealtime() - it },
+                "pending_led_request_id" to pendingLedRequest,
+                "log_storage_error" to DebugLog.storageError)
+            mainHandler.postDelayed(this, 2000L)
+        }
+    }
+    private var gestureId = 0L
+    private var lastDetectorReason = ""
+    private var ledRequestId = 0L
+    private var pendingLedRequest: Long? = null
+    private var pendingLedTarget: Boolean? = null
+    private var confirmedLedState: Boolean? = null
+    private var pendingOffHapticRunnable: Runnable? = null
+    private fun trace(name: String, reason: String, vararg fields: Pair<String, Any?>) {
+        DebugLog.event(name, "reason" to reason, "gesture_id" to gestureId,
+            "active_light" to activeLightSource, "led_owned" to hardwareLedOwnedByUs,
+            "screen_visible" to ScreenTorchActivity.isScreenTorchVisible,
+            "pocket_blocked" to isPocketBlocked, "sensors_active" to sensorsActive,
+            "interactive" to if (::powerManager.isInitialized) powerManager.isInteractive else null,
+            "locked" to if (::keyguardManager.isInitialized) keyguardManager.isKeyguardLocked else null,
+            "wake_held" to wakeLock?.isHeld, "wake_mode" to wakeMode,
+            "confirmed_led" to confirmedLedState, *fields)
+    }
     private val detector = ChopDetector()
     private val gravityFilter = GravityHighPass()
     private val linearBuffer = FloatArray(3)
@@ -147,6 +175,7 @@ class ChopDetectionService : Service(), SensorEventListener {
 
     // Safety Auto-Shutoff Runnable
     private val autoShutoffRunnable = Runnable {
+        trace("auto_off_timer", if (isOwnedTorchActive()) "OWNED_LIGHT_TIMEOUT" else "NO_OWNED_LIGHT_SKIP")
         if (isOwnedTorchActive()) {
             deactivateActiveTorch()
         }
@@ -154,6 +183,8 @@ class ChopDetectionService : Service(), SensorEventListener {
 
     // Screen-Off Sleep Window Runnable (for Wake Modes 0..4)
     private val sleepSensorsRunnable = Runnable {
+        trace("sensor_sleep_timer", if (!isOwnedTorchActive() && wakeMode < 5 && !powerManager.isInteractive)
+            "LISTENING_WINDOW_ENDED" else "KEEP_LISTENING")
         if (!isOwnedTorchActive() && wakeMode < 5 && !powerManager.isInteractive) {
             deactivateSensorsAndWakeLock()
         }
@@ -162,6 +193,8 @@ class ChopDetectionService : Service(), SensorEventListener {
     // Android 10+ can silently block a background startActivity(); the full-screen-intent alert is
     // then the only way in. If the torch screen never appeared, say so in the status notification.
     private val screenTorchLaunchCheck = Runnable {
+        trace("screen_launch_check", if (ScreenTorchActivity.isScreenTorchVisible)
+            "ACTIVITY_VISIBLE" else "ACTIVITY_NOT_VISIBLE_NO_OS_REASON_AVAILABLE")
         if (activeLightSource == ActiveLightSource.SCREEN_WHITE && !ScreenTorchActivity.isScreenTorchVisible) {
             updateNotificationStatus("Screen Torch blocked by Android • tap the alert to open it")
         }
@@ -172,6 +205,7 @@ class ChopDetectionService : Service(), SensorEventListener {
     // Screen State & ScreenTorch Dismissal Receiver
     private val systemReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
+            trace("system_broadcast", intent?.action ?: "NULL_ACTION")
             when (intent?.action) {
                 Intent.ACTION_SCREEN_ON -> {
                     mainHandler.removeCallbacks(sleepSensorsRunnable)
@@ -201,7 +235,23 @@ class ChopDetectionService : Service(), SensorEventListener {
      */
     private val torchCallback = object : CameraManager.TorchCallback() {
         override fun onTorchModeChanged(cameraId: String, enabled: Boolean) {
+            trace("led_callback", if (cameraId == flashCameraId) "OS_REPORTED_LED_STATE" else "OTHER_CAMERA_IGNORED",
+                "camera_id" to cameraId, "enabled" to enabled,
+                "pending_request_id" to pendingLedRequest, "requested_target" to pendingLedTarget)
             if (cameraId != flashCameraId) return
+            val confirmedOwnOffRequest = if (!enabled && pendingLedTarget == false) pendingLedRequest else null
+            confirmedLedState = enabled
+            if (enabled) {
+                // A new ON transition must not deliver an old delayed OFF vibration.
+                pendingOffHapticRunnable?.let(mainHandler::removeCallbacks)
+                pendingOffHapticRunnable = null
+            }
+            if (pendingLedRequest != null && pendingLedTarget == enabled) {
+                trace("led_request_confirmed", "CALLBACK_MATCHED_REQUEST", "request_id" to pendingLedRequest,
+                    "enabled" to enabled)
+                pendingLedRequest = null
+                pendingLedTarget = null
+            }
             if (enabled) {
                 if (activeLightSource == ActiveLightSource.NONE) {
                     // Switched on by the system flashlight / another app. Track it so a double-chop
@@ -219,9 +269,21 @@ class ChopDetectionService : Service(), SensorEventListener {
                     scheduleScreenOffWindow()
                 }
             }
+            if (confirmedOwnOffRequest != null) {
+                scheduleConfirmedOffHaptic(confirmedOwnOffRequest)
+            }
         }
 
         override fun onTorchModeUnavailable(cameraId: String) {
+            trace("led_unavailable", "OS_CAMERA_RESOURCE_UNAVAILABLE", "camera_id" to cameraId,
+                "pending_request_id" to pendingLedRequest)
+            if (cameraId == flashCameraId) {
+                pendingOffHapticRunnable?.let(mainHandler::removeCallbacks)
+                pendingOffHapticRunnable = null
+                confirmedLedState = null
+                pendingLedRequest = null
+                pendingLedTarget = null
+            }
             if (cameraId == flashCameraId && activeLightSource == ActiveLightSource.HARDWARE_LED) {
                 activeLightSource = ActiveLightSource.NONE
                 hardwareLedOwnedByUs = false
@@ -235,6 +297,7 @@ class ChopDetectionService : Service(), SensorEventListener {
     }
 
     private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { sharedPrefs, key ->
+        trace("preference_changed", "SETTINGS_RELOADED", "key" to key)
         loadSensitivityPrefs(sharedPrefs)
         if (key == KEY_AUTO_OFF_MINUTES && isOwnedTorchActive()) {
             scheduleAutoShutoff()
@@ -246,6 +309,7 @@ class ChopDetectionService : Service(), SensorEventListener {
 
     override fun onCreate() {
         super.onCreate()
+        DebugLog.start(this)
         sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
         cameraManager = getSystemService(CAMERA_SERVICE) as CameraManager
         powerManager = getSystemService(POWER_SERVICE) as PowerManager
@@ -257,6 +321,30 @@ class ChopDetectionService : Service(), SensorEventListener {
         prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         if (flashCameraId == null && !prefs.getBoolean(KEY_USE_SCREEN_TORCH, false)) {
             prefs.edit { putBoolean(KEY_USE_SCREEN_TORCH, true) }
+        }
+        trace("service_created", "STARTING", "camera_id" to flashCameraId,
+            "has_proximity" to hasProximityHardware,
+            "battery_exempt" to powerManager.isIgnoringBatteryOptimizations(packageName),
+            "notifications_enabled" to getSystemService(NotificationManager::class.java).areNotificationsEnabled())
+        if (BuildConfig.DIAGNOSTICS_ENABLED) detector.traceListener = { sample ->
+            if (sample.reason == "FIRST_CHOP_RECORDED") gestureId++
+            DebugLog.event("motion_sample", "reason" to sample.reason, "gesture_id" to gestureId,
+                "force" to sample.force, "in_plane" to sample.inPlane,
+                "phase_before" to sample.before, "phase_after" to sample.after,
+                "threshold" to sample.threshold, "window_ms" to sample.windowMs,
+                "torch_on_off_mode" to sample.torchIsOn,
+                "cooldown_remaining_ms" to sample.cooldownRemainingMs,
+                "first_chop_ms" to sample.firstChopMs, "last_toggle_ms" to sample.lastToggleMs,
+                "gesture_age_ms" to sample.gestureAgeMs, "window_expired" to sample.windowExpired, "sample_now_ms" to sample.nowMs,
+                "linear_x" to linearBuffer[0], "linear_y" to linearBuffer[1], "linear_z" to linearBuffer[2])
+            if (sample.windowExpired) trace("gesture_window_expired", "NO_SECOND_CHOP_IN_WINDOW",
+                "window_ms" to sample.windowMs, "off_mode" to sample.torchIsOn)
+            if (sample.reason != lastDetectorReason || sample.reason == "DOUBLE_CHOP_ACCEPTED") {
+                trace("gesture_decision", sample.reason, "force" to sample.force,
+                    "phase_before" to sample.before, "phase_after" to sample.after,
+                    "cooldown_remaining_ms" to sample.cooldownRemainingMs)
+                lastDetectorReason = sample.reason
+            }
         }
         loadSensitivityPrefs(prefs)
         prefs.registerOnSharedPreferenceChangeListener(prefListener)
@@ -273,23 +361,34 @@ class ChopDetectionService : Service(), SensorEventListener {
         createNotificationChannels()
         startForegroundWithSpecialUse()
         applyWakeModePolicy()
+        if (BuildConfig.DIAGNOSTICS_ENABLED) mainHandler.post(diagnosticHeartbeat)
     }
 
     private fun loadSensitivityPrefs(sharedPrefs: SharedPreferences) {
         useScreenTorch = (flashCameraId == null) || sharedPrefs.getBoolean(KEY_USE_SCREEN_TORCH, false)
-        detector.forceThreshold = sharedPrefs.getFloat(KEY_FORCE_THRESHOLD, 18.5f)
-        detector.chopWindowMs = sharedPrefs.getInt(KEY_CHOP_WINDOW_MS, 650).toLong()
-        detector.cooldownMs = sharedPrefs.getInt(KEY_COOLDOWN_MS, 1000).toLong()
-        autoOffMinutes = sharedPrefs.getInt(KEY_AUTO_OFF_MINUTES, 10)
-        wakeMode = sharedPrefs.getInt(KEY_WAKE_MODE, 2).coerceIn(0, 5)
+        detector.forceThreshold = sharedPrefs.getFloat(KEY_FORCE_THRESHOLD, TorchDefaults.FORCE_THRESHOLD)
+        detector.chopWindowMs = sharedPrefs.getInt(KEY_CHOP_WINDOW_MS, TorchDefaults.CHOP_WINDOW_MS).toLong()
+        detector.cooldownMs = sharedPrefs.getInt(KEY_COOLDOWN_MS, TorchDefaults.COOLDOWN_MS).toLong()
+        autoOffMinutes = sharedPrefs.getInt(KEY_AUTO_OFF_MINUTES, TorchDefaults.AUTO_OFF_MINUTES)
+        wakeMode = sharedPrefs.getInt(KEY_WAKE_MODE, TorchDefaults.WAKE_MODE).coerceIn(0, 5)
+        trace("settings_snapshot", "CURRENT_DETECTOR_AND_POWER_POLICY",
+            "force_threshold" to detector.forceThreshold, "chop_window_ms" to detector.chopWindowMs,
+            "valley_ratio" to ChopDetector.VALLEY_RATIO,
+            "off_force_ratio" to ChopDetector.OFF_FORCE_MULTIPLIER,
+            "off_window_grace_ms" to ChopDetector.OFF_WINDOW_EXTENSION_MS,
+            "cooldown_ms" to detector.cooldownMs, "auto_off_minutes" to autoOffMinutes,
+            "use_screen_torch" to useScreenTorch,
+            "armed_pref" to sharedPrefs.getBoolean(KEY_SERVICE_ENABLED, false))
     }
 
     private fun resetGestureState() {
+        trace("gesture_reset", "GESTURE_AND_GRAVITY_FILTER_RESET_COOLDOWN_RETAINED")
         detector.reset()
         gravityFilter.reset()
     }
 
     private fun applyWakeModePolicy() {
+        trace("wake_policy", "APPLY_CURRENT_POLICY")
         mainHandler.removeCallbacks(sleepSensorsRunnable)
         if (wakeMode == 5 || powerManager.isInteractive || isOwnedTorchActive()) {
             activateSensorsAndWakeLock()
@@ -299,6 +398,9 @@ class ChopDetectionService : Service(), SensorEventListener {
     }
 
     private fun scheduleScreenOffWindow() {
+        trace("screen_off_policy", if (wakeMode == 5 || isOwnedTorchActive())
+            "KEEP_AWAKE_MODE_OR_OWNED_LIGHT" else "LIMITED_LISTENING_WINDOW",
+            "window_ms" to WAKE_WINDOW_MS_MAP[wakeMode])
         mainHandler.removeCallbacks(sleepSensorsRunnable)
         if (wakeMode == 5 || isOwnedTorchActive()) {
             activateSensorsAndWakeLock()
@@ -324,6 +426,7 @@ class ChopDetectionService : Service(), SensorEventListener {
         }
         if (wakeLock?.isHeld == false) {
             wakeLock?.acquire(2 * 60 * 60 * 1000L)
+            trace("wake_lock_acquired", "TWO_HOUR_SAFETY_TIMEOUT", "timeout_ms" to 7_200_000L)
         }
         if (!sensorsActive) {
             resetGestureState()
@@ -333,24 +436,34 @@ class ChopDetectionService : Service(), SensorEventListener {
             // accelerometer + our own high-pass filter on devices without it.
             val motionSensor = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
                 ?: sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+            if (motionSensor == null) trace("motion_sensor_missing", "NO_LINEAR_OR_RAW_ACCELEROMETER")
             motionSensor?.let { sensor ->
-                sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_GAME, 0)
+                val registered = sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_GAME, 0)
+                trace("motion_sensor_registration", if (registered) "REGISTERED" else "REGISTRATION_FAILED",
+                    "sensor_type" to sensor.type, "sensor_name" to sensor.name,
+                    "sensor_wakeup" to sensor.isWakeUpSensor)
             }
             sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY)?.let { prox ->
-                sensorManager.registerListener(this, prox, SensorManager.SENSOR_DELAY_NORMAL, 0)
+                val registered = sensorManager.registerListener(this, prox, SensorManager.SENSOR_DELAY_NORMAL, 0)
+                trace("proximity_sensor_registration", if (registered) "REGISTERED" else "REGISTRATION_FAILED",
+                    "max_range" to prox.maximumRange)
             }
             sensorsActive = true
         }
     }
 
     private fun deactivateSensorsAndWakeLock() {
+        trace("sensors_deactivating", "UNREGISTER_LISTENERS_RELEASE_WAKE_LOCK")
         resetGestureState()
         if (sensorsActive) {
             sensorManager.unregisterListener(this)
             sensorsActive = false
         }
         wakeLock?.let {
-            if (it.isHeld) it.release()
+            if (it.isHeld) {
+                it.release()
+                trace("wake_lock_released", "SENSORS_DEACTIVATED")
+            }
         }
     }
 
@@ -367,14 +480,32 @@ class ChopDetectionService : Service(), SensorEventListener {
         val distance = event.values[0]
         // Binary sensors report 0 (or ~3) for "near" and maxRange for "far"; continuous ones report cm.
         val blockedNow = distance < minOf(maxRange, PROXIMITY_NEAR_CM)
-        if (blockedNow && !isPocketBlocked) {
+        // A covered sensor cannot arm the torch, but must not trap a lit torch ON.
+        // Do not reset a pending OFF gesture when the proximity sensor reports "near".
+        val torchOn = isAnyTorchActive()
+        if (blockedNow && !isPocketBlocked && ChopDetector.shouldBlockByProximity(blockedNow, torchOn)) {
             resetGestureState()
         }
         isPocketBlocked = blockedNow
+        trace("proximity_sample", when {
+            !blockedNow -> "GUARD_CLEAR"
+            torchOn -> "ALLOW_OFF_WHILE_COVERED"
+            else -> "POCKET_GUARD_BLOCKS_ACTIVATION"
+        },
+            "distance_cm" to distance, "max_range_cm" to maxRange,
+            "near_cutoff_cm" to minOf(maxRange, PROXIMITY_NEAR_CM))
     }
 
     private fun handleMotion(event: SensorEvent) {
-        if (isPocketBlocked) {
+        lastMotionElapsedMs = SystemClock.elapsedRealtime()
+        DebugLog.event("motion_raw", "sensor_type" to event.sensor.type,
+            "sensor_timestamp_ns" to event.timestamp,
+            "x" to event.values[0], "y" to event.values[1], "z" to event.values[2],
+            "pocket_blocked" to isPocketBlocked, "wake_held" to wakeLock?.isHeld)
+        val torchOn = isAnyTorchActive()
+        if (ChopDetector.shouldBlockByProximity(isPocketBlocked, torchOn)) {
+            DebugLog.event("motion_sample", "reason" to "POCKET_GUARD_BLOCKED",
+                "gesture_id" to gestureId, "torch_on_off_mode" to false)
             resetGestureState()
             return
         }
@@ -384,14 +515,17 @@ class ChopDetectionService : Service(), SensorEventListener {
         if (event.sensor.type == Sensor.TYPE_LINEAR_ACCELERATION) {
             lin[0] = v[0]; lin[1] = v[1]; lin[2] = v[2]
         } else if (!gravityFilter.filter(v[0], v[1], v[2], now, lin)) {
+            DebugLog.event("motion_sample", "reason" to "GRAVITY_FILTER_WARMUP",
+                "gesture_id" to gestureId, "linear_x" to lin[0], "linear_y" to lin[1], "linear_z" to lin[2])
             return // raw accelerometer fallback still settling
         }
-        if (detector.onLinearAcceleration(lin[0], lin[1], lin[2], now)) {
+        if (detector.onLinearAcceleration(lin[0], lin[1], lin[2], now, torchIsOn = torchOn)) {
             toggleActiveTorch()
         }
     }
 
     private fun toggleActiveTorch() {
+        trace("activation_decision", if (isAnyTorchActive()) "ACCEPTED_CHOP_TURNS_LIGHT_OFF" else "ACCEPTED_CHOP_TURNS_LIGHT_ON")
         if (isAnyTorchActive()) {
             deactivateActiveTorch()
         } else {
@@ -400,6 +534,8 @@ class ChopDetectionService : Service(), SensorEventListener {
     }
 
     private fun activatePreferredTorch() {
+        trace("activation_route", if (useScreenTorch || flashCameraId == null)
+            "SCREEN_SELECTED_OR_NO_FLASH" else "HARDWARE_LED_SELECTED")
         if (useScreenTorch || flashCameraId == null) {
             setScreenTorchState(true)
         } else {
@@ -408,6 +544,11 @@ class ChopDetectionService : Service(), SensorEventListener {
     }
 
     private fun deactivateActiveTorch() {
+        trace("deactivation_route", when {
+            activeLightSource == ActiveLightSource.SCREEN_WHITE || ScreenTorchActivity.isScreenTorchVisible -> "CLOSE_SCREEN_TORCH"
+            activeLightSource == ActiveLightSource.HARDWARE_LED -> "SWITCH_LED_OFF"
+            else -> "NO_TRACKED_ACTIVE_LIGHT"
+        })
         when {
             activeLightSource == ActiveLightSource.SCREEN_WHITE || ScreenTorchActivity.isScreenTorchVisible -> {
                 setScreenTorchState(false)
@@ -419,18 +560,35 @@ class ChopDetectionService : Service(), SensorEventListener {
     }
 
     private fun setHardwareLedState(targetState: Boolean) {
+        val requestId = ++ledRequestId
+        trace("led_request", "REQUESTING_OS_TORCH", "request_id" to requestId, "target" to targetState)
         val camId = flashCameraId
         if (camId == null) {
+            trace("led_request_skipped", "NO_FLASH_CAMERA_ID", "request_id" to requestId)
             if (targetState) setScreenTorchState(true)
             return
         }
         try {
+            pendingLedRequest = requestId
+            pendingLedTarget = targetState
             cameraManager.setTorchMode(camId, targetState)
-            // Note: torchCallback.onTorchModeChanged will authoritatively confirm activeLightSource,
-            // but we also set optimistic state here and trigger haptics immediately.
+            trace("led_api_returned", "REQUEST_RETURNED_WITHOUT_EXCEPTION_NOT_YET_CONFIRMED",
+                "request_id" to requestId, "target" to targetState)
+            mainHandler.postDelayed({
+                if (pendingLedRequest == requestId) trace("led_confirmation_timeout",
+                    "NO_MATCHING_OS_CALLBACK_OBSERVED", "request_id" to requestId, "target" to targetState)
+            }, 1500L)
+            // The ON haptic works and stays immediate. OFF must wait until the OS confirms
+            // the LED actually switched off, then allow the torch/notification transition to settle.
             activeLightSource = if (targetState) ActiveLightSource.HARDWARE_LED else ActiveLightSource.NONE
             hardwareLedOwnedByUs = targetState
-            triggerHapticConfirmation(targetState)
+            if (targetState) {
+                pendingOffHapticRunnable?.let(mainHandler::removeCallbacks)
+                pendingOffHapticRunnable = null
+                triggerHapticConfirmation(true)
+            } else {
+                trace("haptic_off_deferred", "WAITING_FOR_LED_OFF_CALLBACK", "request_id" to requestId)
+            }
             if (targetState) {
                 mainHandler.removeCallbacks(sleepSensorsRunnable)
                 scheduleAutoShutoff()
@@ -443,6 +601,11 @@ class ChopDetectionService : Service(), SensorEventListener {
                 }
             }
         } catch (e: CameraAccessException) {
+            pendingLedRequest = null
+            pendingLedTarget = null
+            trace("led_request_failed", "CAMERA_ACCESS_EXCEPTION", "request_id" to requestId,
+                "camera_reason_code" to e.reason, "message" to e.message,
+                "stack" to android.util.Log.getStackTraceString(e))
             activeLightSource = ActiveLightSource.NONE
             hardwareLedOwnedByUs = false
             if (targetState) {
@@ -453,6 +616,10 @@ class ChopDetectionService : Service(), SensorEventListener {
                 updateNotificationStatus("LED unavailable (${e.reason})")
             }
         } catch (e: Exception) {
+            pendingLedRequest = null
+            pendingLedTarget = null
+            trace("led_request_failed", e.javaClass.simpleName, "request_id" to requestId,
+                "message" to e.message, "stack" to android.util.Log.getStackTraceString(e))
             activeLightSource = ActiveLightSource.NONE
             hardwareLedOwnedByUs = false
             updateNotificationStatus("Torch error: ${e.javaClass.simpleName}")
@@ -460,6 +627,10 @@ class ChopDetectionService : Service(), SensorEventListener {
     }
 
     private fun setScreenTorchState(targetState: Boolean) {
+        trace("screen_torch_request", if (targetState) "OPEN_REQUESTED_NOT_YET_VISIBLE" else "CLOSE_REQUESTED",
+            "notifications_enabled" to getSystemService(NotificationManager::class.java).areNotificationsEnabled(),
+            "full_screen_intent_allowed" to if (Build.VERSION.SDK_INT >= 34)
+                getSystemService(NotificationManager::class.java).canUseFullScreenIntent() else true)
         val nm = getSystemService(NotificationManager::class.java)
         if (targetState) {
             activeLightSource = ActiveLightSource.SCREEN_WHITE
@@ -496,7 +667,11 @@ class ChopDetectionService : Service(), SensorEventListener {
             if (powerManager.isInteractive && !keyguardManager.isKeyguardLocked) {
                 try {
                     startActivity(fullScreenIntent)
-                } catch (_: Exception) {}
+                    trace("screen_activity_start", "START_ACTIVITY_RETURNED_VISIBILITY_PENDING")
+                } catch (error: Exception) {
+                    trace("screen_activity_start_failed", error.javaClass.simpleName,
+                        "message" to error.message, "stack" to android.util.Log.getStackTraceString(error))
+                }
             }
             mainHandler.removeCallbacks(screenTorchLaunchCheck)
             mainHandler.postDelayed(screenTorchLaunchCheck, SCREEN_TORCH_LAUNCH_CHECK_MS)
@@ -516,23 +691,84 @@ class ChopDetectionService : Service(), SensorEventListener {
     }
 
     private fun scheduleAutoShutoff() {
+        trace("auto_off_schedule", if (autoOffMinutes > 0) "TIMER_SCHEDULED" else "DISABLED_BY_SETTING",
+            "minutes" to autoOffMinutes)
         mainHandler.removeCallbacks(autoShutoffRunnable)
         if (autoOffMinutes > 0) {
             mainHandler.postDelayed(autoShutoffRunnable, autoOffMinutes * 60_000L)
         }
     }
 
-    private fun triggerHapticConfirmation(turnedOn: Boolean) {
-        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val vm = getSystemService(VIBRATOR_MANAGER_SERVICE) as VibratorManager
-            vm.defaultVibrator
-        } else {
-            @Suppress("DEPRECATION")
-            getSystemService(VIBRATOR_SERVICE) as Vibrator
+    /**
+     * Only a matching pending OFF request can schedule this haptic, so unrelated camera
+     * callbacks cannot vibrate. A brief delay avoids racing Android's LED-off transition.
+     */
+    private fun scheduleConfirmedOffHaptic(requestId: Long) {
+        pendingOffHapticRunnable?.let(mainHandler::removeCallbacks)
+        val task = Runnable {
+            pendingOffHapticRunnable = null
+            if (TorchHapticPatterns.shouldDeliverConfirmedOff(
+                    confirmedLedState, isAnyTorchActive(), requestId, ledRequestId
+                )) {
+                trace("haptic_off_confirmed", "LED_OFF_AND_SETTLED", "request_id" to requestId,
+                    "delay_ms" to TorchHapticPatterns.CONFIRMED_OFF_HAPTIC_DELAY_MS)
+                triggerHapticConfirmation(false)
+            } else {
+                trace("haptic_off_suppressed", "LED_REACTIVATED_OR_STATE_CHANGED",
+                    "request_id" to requestId, "confirmed_led" to confirmedLedState)
+            }
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val duration = if (turnedOn) 70L else 45L
-            vibrator.vibrate(VibrationEffect.createOneShot(duration, VibrationEffect.DEFAULT_AMPLITUDE))
+        pendingOffHapticRunnable = task
+        trace("haptic_off_scheduled", "WAITING_AFTER_LED_CONFIRMATION", "request_id" to requestId,
+            "delay_ms" to TorchHapticPatterns.CONFIRMED_OFF_HAPTIC_DELAY_MS)
+        mainHandler.postDelayed(task, TorchHapticPatterns.CONFIRMED_OFF_HAPTIC_DELAY_MS)
+    }
+
+    /**
+     * Working ON: two 240 ms default-amplitude pulses. OFF: one stronger 220 ms pulse.
+     * Both calls fail open so a haptic issue cannot interrupt flashlight control.
+     */
+    private fun triggerHapticConfirmation(turnedOn: Boolean) {
+        val pattern = if (turnedOn) "DOUBLE_PULSE_ON" else "SINGLE_PULSE_OFF"
+        trace("haptic_request", pattern, "target" to turnedOn,
+            "usage" to if (turnedOn) "LEGACY_DEFAULT" else "HARDWARE_FEEDBACK")
+        try {
+            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val vm = getSystemService(VIBRATOR_MANAGER_SERVICE) as VibratorManager
+                vm.defaultVibrator
+            } else {
+                @Suppress("DEPRECATION")
+                getSystemService(VIBRATOR_SERVICE) as Vibrator
+            }
+            if (!vibrator.hasVibrator()) {
+                trace("haptic_skipped", "NO_VIBRATOR_AVAILABLE")
+                return
+            }
+            val effect = if (turnedOn) {
+                // Leave the working ON pathway exactly as before.
+                VibrationEffect.createWaveform(TorchHapticPatterns.activationTimingsMs(), -1)
+            } else {
+                VibrationEffect.createWaveform(
+                    TorchHapticPatterns.deactivationTimingsMs(),
+                    TorchHapticPatterns.deactivationAmplitudes(), -1
+                )
+            }
+            if (!turnedOn && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                // Android may silently ignore UNKNOWN-usage vibration from a non-visible app,
+                // even if the native API returns. Hardware feedback is a policy-permitted
+                // usage for a hardware control, including in background and battery saver.
+                val attrs = VibrationAttributes.Builder()
+                    .setUsage(VibrationAttributes.USAGE_HARDWARE_FEEDBACK).build()
+                vibrator.vibrate(effect, attrs)
+            } else {
+                vibrator.vibrate(effect)
+            }
+            trace("haptic_submitted", pattern,
+                "target" to turnedOn, "vibrator_available" to true,
+                "usage" to if (!turnedOn && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                    "HARDWARE_FEEDBACK" else "LEGACY_DEFAULT")
+        } catch (error: Exception) {
+            trace("haptic_failed", error.javaClass.simpleName, "message" to error.message)
         }
     }
 
@@ -591,12 +827,14 @@ class ChopDetectionService : Service(), SensorEventListener {
     }
 
     private fun updateNotificationStatus(statusText: String) {
+        trace("notification_status", "STATUS_UPDATED", "text" to statusText)
         lastStatusText = statusText
         val nm = getSystemService(NotificationManager::class.java)
         nm.notify(NOTIFICATION_ID, buildNotification(statusText))
     }
 
     private fun startForegroundWithSpecialUse() {
+        trace("foreground_start", "REQUEST_SPECIAL_USE_FOREGROUND_SERVICE")
         val notification = buildNotification(lastStatusText)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(
@@ -615,16 +853,22 @@ class ChopDetectionService : Service(), SensorEventListener {
      * wake locks are released whenever the service stops via UI switch, QS tile, notification, or OS.
      */
     private fun shutdownTorchAndCleanup() {
+        trace("service_cleanup", "STOP_OWNED_LIGHT_CANCEL_TIMERS_AND_SENSORS")
         mainHandler.removeCallbacks(autoShutoffRunnable)
         mainHandler.removeCallbacks(sleepSensorsRunnable)
         mainHandler.removeCallbacks(screenTorchLaunchCheck)
+        pendingOffHapticRunnable?.let(mainHandler::removeCallbacks)
+        pendingOffHapticRunnable = null
 
         // Only switch the LED off if we switched it on; leave a flashlight someone else started alone.
         if (hardwareLedOwnedByUs) {
             flashCameraId?.let { camId ->
                 try {
                     cameraManager.setTorchMode(camId, false)
-                } catch (_: Exception) {}
+                    trace("cleanup_led_api_returned", "OFF_REQUEST_RETURNED")
+                } catch (error: Exception) {
+                    trace("cleanup_led_failed", error.javaClass.simpleName, "message" to error.message)
+                }
             }
         }
         hardwareLedOwnedByUs = false
@@ -637,6 +881,14 @@ class ChopDetectionService : Service(), SensorEventListener {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (DeviceEligibility.isMotorolaDevice()) {
+            prefs.edit { putBoolean(KEY_SERVICE_ENABLED, false) }
+            trace("service_blocked", "MOTOROLA_DEVICE_EXCLUDED")
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        trace("service_start_command", intent?.action ?: "START_OR_SYSTEM_RESTART",
+            "flags" to flags, "start_id" to startId)
         if (intent?.action == ACTION_STOP_AND_OFF) {
             prefs.edit { putBoolean(KEY_SERVICE_ENABLED, false) }
             shutdownTorchAndCleanup()
@@ -651,6 +903,8 @@ class ChopDetectionService : Service(), SensorEventListener {
     }
 
     override fun onDestroy() {
+        trace("service_destroyed", "ANDROID_ON_DESTROY")
+        mainHandler.removeCallbacks(diagnosticHeartbeat)
         shutdownTorchAndCleanup()
         try {
             unregisterReceiver(systemReceiver)
@@ -660,6 +914,13 @@ class ChopDetectionService : Service(), SensorEventListener {
         super.onDestroy()
     }
 
-    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
+        trace("sensor_accuracy", "ACCURACY_CHANGED", "sensor_type" to sensor?.type, "accuracy" to accuracy)
+    }
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        trace("service_task_removed", "APP_TASK_SWIPED_AWAY")
+        super.onTaskRemoved(rootIntent)
+    }
     override fun onBind(intent: Intent?): IBinder? = null
 }
+
