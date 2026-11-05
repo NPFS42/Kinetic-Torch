@@ -8,6 +8,8 @@ internal object TorchHapticPatterns {
     const val ACTIVATION_PULSE_MS = 240L
     const val ACTIVATION_GAP_MS = 90L
     const val DEACTIVATION_PULSE_MS = 220L
+    const val DEACTIVATION_AMPLITUDE = 255  // Android's maximum explicit amplitude.
+    const val CONFIRMED_OFF_HAPTIC_DELAY_MS = 140L // Avoid the immediate LED-off transition.
 
     // Start immediately, vibrate, pause, then vibrate again; -1 means no repeats.
     fun activationTimingsMs(): LongArray = longArrayOf(
@@ -16,4 +18,7 @@ internal object TorchHapticPatterns {
 
     // A single pulse using the same createWaveform API already verified for ON on-device.
     fun deactivationTimingsMs(): LongArray = longArrayOf(0L, DEACTIVATION_PULSE_MS)
+
+    // Only the OFF effect is made explicit; preserve the previously working double-ON pattern.
+    fun deactivationAmplitudes(): IntArray = intArrayOf(0, DEACTIVATION_AMPLITUDE)
 }
