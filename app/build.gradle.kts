@@ -11,7 +11,7 @@ android {
         applicationId = "com.npfs.stars.kinetictorch"
         minSdk = 26
         targetSdk = 36
-        versionCode = 15
+        versionCode = 16
         versionName = "1.3.2"
         buildConfigField("boolean", "DIAGNOSTICS_ENABLED", "false")
     }
@@ -34,8 +34,8 @@ android {
     buildTypes {
         debug {
             buildConfigField("boolean", "DIAGNOSTICS_ENABLED", "true")
-            applicationIdSuffix = ".rc4haptic"
-            versionNameSuffix = "-test-rc4"
+            applicationIdSuffix = ".rc5haptic"
+            versionNameSuffix = "-test-rc5"
         }
         release {
             isMinifyEnabled = true
