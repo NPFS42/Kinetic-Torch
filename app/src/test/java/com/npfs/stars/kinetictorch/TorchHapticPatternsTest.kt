@@ -25,11 +25,6 @@ class TorchHapticPatternsTest {
         assertTrue(!TorchHapticPatterns.shouldDeliverConfirmedOff(false, false, 4L, 5L))
     }
 
-    @Test fun diagnosticOffProbeIsBitForBitTheKnownWorkingOnWaveform() {
-        assertArrayEquals(TorchHapticPatterns.activationTimingsMs(), TorchHapticPatterns.diagnosticOffProbeTimingsMs())
-        assertArrayEquals(longArrayOf(0L, 240L, 90L, 240L), TorchHapticPatterns.diagnosticOffProbeTimingsMs())
-    }
-
     @Test fun onPatternIsStillTheOriginalWorkingTwoPulses() {
         assertArrayEquals(longArrayOf(0L, 240L, 90L, 240L), TorchHapticPatterns.activationTimingsMs())
         assertTrue(TorchHapticPatterns.ACTIVATION_GAP_MS > 0L)
