@@ -668,18 +668,37 @@ class ChopDetectionService : Service(), SensorEventListener {
         }
     }
 
+    /**
+     * A double pulse confirms ON and a single short pulse confirms OFF. This runs only from the
+     * torch-toggle paths, not the asynchronous camera callback, avoiding duplicate feedback.
+     * If the vibrator is missing or blocked, the torch operation must still succeed.
+     */
     private fun triggerHapticConfirmation(turnedOn: Boolean) {
-        trace("haptic_request", "TOGGLE_FEEDBACK", "target" to turnedOn)
-        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val vm = getSystemService(VIBRATOR_MANAGER_SERVICE) as VibratorManager
-            vm.defaultVibrator
-        } else {
-            @Suppress("DEPRECATION")
-            getSystemService(VIBRATOR_SERVICE) as Vibrator
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val duration = if (turnedOn) 70L else 45L
-            vibrator.vibrate(VibrationEffect.createOneShot(duration, VibrationEffect.DEFAULT_AMPLITUDE))
+        trace("haptic_request", if (turnedOn) "DOUBLE_PULSE_ON" else "SINGLE_PULSE_OFF",
+            "target" to turnedOn)
+        try {
+            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val vm = getSystemService(VIBRATOR_MANAGER_SERVICE) as VibratorManager
+                vm.defaultVibrator
+            } else {
+                @Suppress("DEPRECATION")
+                getSystemService(VIBRATOR_SERVICE) as Vibrator
+            }
+            if (!vibrator.hasVibrator()) {
+                trace("haptic_skipped", "NO_VIBRATOR_AVAILABLE")
+                return
+            }
+            val effect = if (turnedOn) {
+                VibrationEffect.createWaveform(TorchHapticPatterns.activationTimingsMs(), -1)
+            } else {
+                VibrationEffect.createOneShot(
+                    TorchHapticPatterns.DEACTIVATION_PULSE_MS,
+                    VibrationEffect.DEFAULT_AMPLITUDE
+                )
+            }
+            vibrator.vibrate(effect)
+        } catch (error: Exception) {
+            trace("haptic_failed", error.javaClass.simpleName, "message" to error.message)
         }
     }
 
