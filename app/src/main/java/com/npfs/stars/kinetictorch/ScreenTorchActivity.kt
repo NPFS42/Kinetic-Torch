@@ -16,6 +16,7 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.toColorInt
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -110,6 +111,22 @@ class ScreenTorchActivity : AppCompatActivity() {
         }
         root.addView(hintText)
         setContentView(root)
+
+        // Preserve the full white-light canvas, but keep the dismiss hint clear of any
+        // status/navigation gestures, cutouts, and transient system-bar overlays.
+        ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
+            val safe = insets.getInsetsIgnoringVisibility(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+            )
+            val sideMargin = (20 * resources.displayMetrics.density).toInt()
+            val params = hintText.layoutParams as FrameLayout.LayoutParams
+            params.bottomMargin = bottomMarginPx + safe.bottom
+            params.leftMargin = sideMargin + safe.left
+            params.rightMargin = sideMargin + safe.right
+            hintText.layoutParams = params
+            insets
+        }
+        ViewCompat.requestApplyInsets(root)
 
         WindowInsetsControllerCompat(window, root).apply {
             hide(WindowInsetsCompat.Type.systemBars())
