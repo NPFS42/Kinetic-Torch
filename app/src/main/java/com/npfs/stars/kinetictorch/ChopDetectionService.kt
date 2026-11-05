@@ -706,7 +706,9 @@ class ChopDetectionService : Service(), SensorEventListener {
         pendingOffHapticRunnable?.let(mainHandler::removeCallbacks)
         val task = Runnable {
             pendingOffHapticRunnable = null
-            if (confirmedLedState == false && !isAnyTorchActive() && ledRequestId == requestId) {
+            if (TorchHapticPatterns.shouldDeliverConfirmedOff(
+                    confirmedLedState, isAnyTorchActive(), requestId, ledRequestId
+                )) {
                 trace("haptic_off_confirmed", "LED_OFF_AND_SETTLED", "request_id" to requestId,
                     "delay_ms" to TorchHapticPatterns.CONFIRMED_OFF_HAPTIC_DELAY_MS)
                 triggerHapticConfirmation(false)
