@@ -9,7 +9,7 @@ Motorola provides its own proprietary chop-to-flashlight behavior. S.T.A.R.S. Ki
 ## Google Play exclusion — **manual Play Console action required**
 Per Google's [Device catalog documentation](https://support.google.com/googleplay/android-developer/answer/7353455), once an AAB has been uploaded, go to **Monitor and improve → Reach and devices → Device catalog**. Filter by manufacturer and manually exclude **each Motorola model**. Model exclusions apply across variants, and take effect for the entire app. Google Play does not document a blanket dynamic exclude-by-manufacturer rule: review newly introduced Motorola models periodically. Internal testers are an exception to Play model exclusion. Do not claim Play distribution is excluded until verified in the console.
 
-## Default sliders (provisional)
+## Default sliders (owner-tested baseline)
 - Force threshold: **12.0 m/s²** (working owner setting)
 - Double-chop window: **750 ms** (working owner setting)
 - Automatic shutoff: **10 minutes**
@@ -17,12 +17,13 @@ Per Google's [Device catalog documentation](https://support.google.com/googlepla
 
 The Reset Sliders button restores only these four settings, not the arm switch, screen-torch selection, notification prompts, or cooldown. Existing user choices survive app upgrades. The gesture defaults are known to work on the owner's device; cross-device validation is still required.
 
-## Vibration confirmation (RC2+)
-- ON: two **240 ms** pulses separated by a **90 ms** silence.
-- OFF: one **220 ms** pulse.
-- A haptic is emitted from the actual LED/screen torch toggle path, not from the asynchronous camera LED callback, so matching callbacks don't double-vibrate.
+## Vibration confirmation (1.3.3)
+- ON: two **240 ms** pulses separated by a **90 ms** silence; leave the proven ON pathway unchanged.
+- Hardware LED OFF: one **220 ms** maximum-amplitude pulse, scheduled **140 ms** after an OS LED-off callback matching an in-flight app request. Android API 33+ specifies **USAGE_HARDWARE_FEEDBACK** for the OFF vibration to avoid silent background-usage rejection.
+- Unrelated camera torch callbacks must not trigger a pulse. Cancel a pending OFF pulse on subsequent ON, service cleanup, or camera unavailability.
+- Screen-white torch OFF still uses its direct toggle path and must be tested on device.
 - A missing, disabled, or failing vibrator must not interrupt flashlight toggling. Neither a boot restart nor settings changes should vibrate.
-- Test both LED and screen torch modes on hardware: successful double-chop ON yields two pulses, successful double-chop OFF yields one pulse, failed activation produces no success signal, and automatic safety shutoff behavior remains unchanged.
+- Device validation: owner confirmed the RC6 LED ON/OFF gestures and haptics on a Pixel 10 Pro XL. Broader devices, sleep states, screen-torch mode and accidental activation still require acceptance testing.
 
 ## Gesture reliability adjustments (RC3)
 - Original quiet-valley criterion: movement had to fall below **45%** of active force threshold (5.4 m/s² at 12.0 m/s²).
@@ -33,4 +34,4 @@ The Reset Sliders button restores only these four settings, not the arm switch, 
 - Keep the owner's configured 12.0 m/s² / 750 ms factory defaults and previously saved slider values. Test intentional gestures and accidental movement on hardware before release.
 
 ## Source/release caveat
-This change is based on `debug-logging`, which contains the current diagnostic source. Do not ship it as an APK/AAB without reconciling it with the owner's installed working 1.3.1 production build (code 10), verifying the signing key and increasing the Play version code above 10. No released artifact is produced by this change alone.
+The 1.3.3 source integrates the debug-logging and RC6 code paths on main and uses versionCode 18, above the previously reported 1.3.1 beta code 10. The user's tested RC6 APK had a different test package identity and debug signing certificate. Producing a production release still requires the original private signing/upload key, an actual package-upgrade/signature check and Play Console policy review. Updating main does not publish an app update.
