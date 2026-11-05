@@ -319,12 +319,13 @@ class ChopDetectionService : Service(), SensorEventListener {
                 "force" to sample.force, "in_plane" to sample.inPlane,
                 "phase_before" to sample.before, "phase_after" to sample.after,
                 "threshold" to sample.threshold, "window_ms" to sample.windowMs,
+                "torch_on_off_mode" to sample.torchIsOn,
                 "cooldown_remaining_ms" to sample.cooldownRemainingMs,
                 "first_chop_ms" to sample.firstChopMs, "last_toggle_ms" to sample.lastToggleMs,
                 "gesture_age_ms" to sample.gestureAgeMs, "window_expired" to sample.windowExpired, "sample_now_ms" to sample.nowMs,
                 "linear_x" to linearBuffer[0], "linear_y" to linearBuffer[1], "linear_z" to linearBuffer[2])
             if (sample.windowExpired) trace("gesture_window_expired", "NO_SECOND_CHOP_IN_WINDOW",
-                "window_ms" to sample.windowMs)
+                "window_ms" to sample.windowMs, "off_mode" to sample.torchIsOn)
             if (sample.reason != lastDetectorReason || sample.reason == "DOUBLE_CHOP_ACCEPTED") {
                 trace("gesture_decision", sample.reason, "force" to sample.force,
                     "phase_before" to sample.before, "phase_after" to sample.after,
@@ -359,6 +360,9 @@ class ChopDetectionService : Service(), SensorEventListener {
         wakeMode = sharedPrefs.getInt(KEY_WAKE_MODE, TorchDefaults.WAKE_MODE).coerceIn(0, 5)
         trace("settings_snapshot", "CURRENT_DETECTOR_AND_POWER_POLICY",
             "force_threshold" to detector.forceThreshold, "chop_window_ms" to detector.chopWindowMs,
+            "valley_ratio" to ChopDetector.VALLEY_RATIO,
+            "off_force_ratio" to ChopDetector.OFF_FORCE_MULTIPLIER,
+            "off_window_grace_ms" to ChopDetector.OFF_WINDOW_EXTENSION_MS,
             "cooldown_ms" to detector.cooldownMs, "auto_off_minutes" to autoOffMinutes,
             "use_screen_torch" to useScreenTorch,
             "armed_pref" to sharedPrefs.getBoolean(KEY_SERVICE_ENABLED, false))
@@ -463,11 +467,18 @@ class ChopDetectionService : Service(), SensorEventListener {
         val distance = event.values[0]
         // Binary sensors report 0 (or ~3) for "near" and maxRange for "far"; continuous ones report cm.
         val blockedNow = distance < minOf(maxRange, PROXIMITY_NEAR_CM)
-        if (blockedNow && !isPocketBlocked) {
+        // A covered sensor cannot arm the torch, but must not trap a lit torch ON.
+        // Do not reset a pending OFF gesture when the proximity sensor reports "near".
+        val torchOn = isAnyTorchActive()
+        if (blockedNow && !isPocketBlocked && ChopDetector.shouldBlockByProximity(blockedNow, torchOn)) {
             resetGestureState()
         }
         isPocketBlocked = blockedNow
-        trace("proximity_sample", if (blockedNow) "POCKET_GUARD_BLOCKS_ALL_GESTURES" else "GUARD_CLEAR",
+        trace("proximity_sample", when {
+            !blockedNow -> "GUARD_CLEAR"
+            torchOn -> "ALLOW_OFF_WHILE_COVERED"
+            else -> "POCKET_GUARD_BLOCKS_ACTIVATION"
+        },
             "distance_cm" to distance, "max_range_cm" to maxRange,
             "near_cutoff_cm" to minOf(maxRange, PROXIMITY_NEAR_CM))
     }
@@ -478,9 +489,10 @@ class ChopDetectionService : Service(), SensorEventListener {
             "sensor_timestamp_ns" to event.timestamp,
             "x" to event.values[0], "y" to event.values[1], "z" to event.values[2],
             "pocket_blocked" to isPocketBlocked, "wake_held" to wakeLock?.isHeld)
-        if (isPocketBlocked) {
+        val torchOn = isAnyTorchActive()
+        if (ChopDetector.shouldBlockByProximity(isPocketBlocked, torchOn)) {
             DebugLog.event("motion_sample", "reason" to "POCKET_GUARD_BLOCKED",
-                "gesture_id" to gestureId)
+                "gesture_id" to gestureId, "torch_on_off_mode" to false)
             resetGestureState()
             return
         }
@@ -494,7 +506,7 @@ class ChopDetectionService : Service(), SensorEventListener {
                 "gesture_id" to gestureId, "linear_x" to lin[0], "linear_y" to lin[1], "linear_z" to lin[2])
             return // raw accelerometer fallback still settling
         }
-        if (detector.onLinearAcceleration(lin[0], lin[1], lin[2], now)) {
+        if (detector.onLinearAcceleration(lin[0], lin[1], lin[2], now, torchIsOn = torchOn)) {
             toggleActiveTorch()
         }
     }
