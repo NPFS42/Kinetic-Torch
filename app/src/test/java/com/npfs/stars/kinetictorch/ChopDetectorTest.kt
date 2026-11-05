@@ -105,6 +105,66 @@ class ChopDetectorTest {
     }
 
     @Test
+    fun measuredMidpointBetweenChopsNoLongerNeedsToDropBelowFortyFivePercent() {
+        val calibrated = ChopDetector(forceThreshold = 12f, chopWindowMs = 750L)
+        assertFalse(calibrated.onLinearAcceleration(15f, 0f, 0f, 0L))
+        // 8 m/s² is below the 80% valley (9.6), but above the old 45% valley (5.4).
+        assertFalse(calibrated.onLinearAcceleration(8f, 0f, 0f, 100L))
+        assertTrue(calibrated.onLinearAcceleration(15f, 0f, 0f, 300L))
+    }
+
+    @Test
+    fun torchOffAcceptsSeventyFivePercentForceButTorchOnDoesNot() {
+        val on = ChopDetector(forceThreshold = 12f, chopWindowMs = 750L)
+        assertFalse(on.onLinearAcceleration(10f, 0f, 0f, 0L, torchIsOn = false))
+        assertFalse(on.onLinearAcceleration(0f, 0f, 0f, 100L, torchIsOn = false))
+        assertFalse(on.onLinearAcceleration(10f, 0f, 0f, 320L, torchIsOn = false))
+
+        val off = ChopDetector(forceThreshold = 12f, chopWindowMs = 750L)
+        assertFalse(off.onLinearAcceleration(10f, 0f, 0f, 0L, torchIsOn = true))
+        assertFalse(off.onLinearAcceleration(0f, 0f, 0f, 100L, torchIsOn = true))
+        assertTrue(off.onLinearAcceleration(10f, 0f, 0f, 320L, torchIsOn = true))
+    }
+
+    @Test
+    fun torchOffAddsTwoHundredFiftyMsGraceToSelectedWindow() {
+        val on = ChopDetector(forceThreshold = 12f, chopWindowMs = 750L)
+        assertFalse(on.onLinearAcceleration(15f, 0f, 0f, 0L, torchIsOn = false))
+        assertFalse(on.onLinearAcceleration(0f, 0f, 0f, 100L, torchIsOn = false))
+        assertFalse(on.onLinearAcceleration(15f, 0f, 0f, 900L, torchIsOn = false))
+
+        val off = ChopDetector(forceThreshold = 12f, chopWindowMs = 750L)
+        assertFalse(off.onLinearAcceleration(15f, 0f, 0f, 0L, torchIsOn = true))
+        assertFalse(off.onLinearAcceleration(0f, 0f, 0f, 100L, torchIsOn = true))
+        assertTrue(off.onLinearAcceleration(15f, 0f, 0f, 900L, torchIsOn = true))
+    }
+
+    @Test
+    fun offWindowStillExpiresAndDoesNotAcceptLateRecoil() {
+        val d = ChopDetector(forceThreshold = 12f, chopWindowMs = 750L)
+        assertFalse(d.onLinearAcceleration(20f, 0f, 0f, 0L, torchIsOn = true))
+        assertFalse(d.onLinearAcceleration(0f, 0f, 0f, 100L, torchIsOn = true))
+        assertFalse(d.onLinearAcceleration(20f, 0f, 0f, 1100L, torchIsOn = true))
+    }
+
+    @Test
+    fun relaxedValleyStillIgnoresSingleSpikesAndRecoilWithinTwoHundredMs() {
+        val d = ChopDetector(forceThreshold = 12f, chopWindowMs = 750L)
+        assertFalse(d.onLinearAcceleration(15f, 0f, 0f, 0L))
+        assertFalse(d.onLinearAcceleration(8f, 0f, 0f, 80L))
+        assertFalse(d.onLinearAcceleration(15f, 0f, 0f, 150L))
+        assertFalse(d.onLinearAcceleration(0f, 0f, 0f, 180L))
+        assertTrue(d.onLinearAcceleration(15f, 0f, 0f, 300L))
+    }
+
+    @Test
+    fun coveredSensorBlocksActivationButCannotBlockShutdown() {
+        assertTrue(ChopDetector.shouldBlockByProximity(pocketCovered = true, torchIsOn = false))
+        assertFalse(ChopDetector.shouldBlockByProximity(pocketCovered = true, torchIsOn = true))
+        assertFalse(ChopDetector.shouldBlockByProximity(pocketCovered = false, torchIsOn = false))
+    }
+
+    @Test
     fun chopPlaneHelper() {
         assertTrue(ChopDetector.isChopPlane(10f, 0f, 5f))
         assertFalse(ChopDetector.isChopPlane(1f, 1f, 30f))
