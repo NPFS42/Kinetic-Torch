@@ -10,8 +10,9 @@ import kotlin.math.sqrt
  * Sensor.TYPE_LINEAR_ACCELERATION or from [GravityHighPass] applied to the raw accelerometer.
  * Deliberately has no Android imports so it can be unit-tested on the plain JVM.
  *
- * Gesture: spike >= threshold -> quiet valley (< threshold * 0.45) -> second spike >= threshold,
- * with the second spike at least [MIN_SECOND_CHOP_GAP_MS] and at most [chopWindowMs] after the first.
+ * Gesture: spike >= threshold -> reduced-motion valley (< threshold * 0.80) -> second spike >= threshold,
+ * with the second spike at least [MIN_SECOND_CHOP_GAP_MS] and within the active window after the first.
+ * Turning a light OFF is intentionally more forgiving, while first activation remains conservative.
  */
 class ChopDetector(
     var forceThreshold: Float = TorchDefaults.FORCE_THRESHOLD,
@@ -19,8 +20,17 @@ class ChopDetector(
     var cooldownMs: Long = TorchDefaults.COOLDOWN_MS.toLong()
 ) {
     companion object {
-        /** Valley must drop below this fraction of the threshold between the two chops. */
-        const val VALLEY_RATIO = 0.45f
+        /**
+         * The original 45% valley required motion below 5.4 m/s² at a 12 m/s² setting.
+         * On-device recordings showed the majority of missed-valley minima above that.
+         * An 80% dip criterion (9.6 m/s² on the default ON setting) captures just over
+         * half of those misses, while retaining the 200 ms recoil guard.
+         */
+        const val VALLEY_RATIO = 0.80f
+
+        /** OFF is easier than ON: 75% force requirement, plus a 250 ms timing grace. */
+        const val OFF_FORCE_MULTIPLIER = 0.75f
+        const val OFF_WINDOW_EXTENSION_MS = 250L
 
         /**
          * A single physical chop produces an accelerate spike and a decelerate spike ~100-150 ms
@@ -59,7 +69,7 @@ class ChopDetector(
         val nowMs: Long, val force: Float, val inPlane: Boolean,
         val firstChopMs: Long, val lastToggleMs: Long,
         val threshold: Float, val windowMs: Long, val cooldownRemainingMs: Long,
-        val windowExpired: Boolean, val gestureAgeMs: Long?
+        val windowExpired: Boolean, val gestureAgeMs: Long?, val torchIsOn: Boolean
     )
 
     /** Optional observer; logging exceptions must not alter gesture recognition. */
@@ -70,10 +80,15 @@ class ChopDetector(
         else -> "WAITING_SECOND_CHOP"
     }
 
-    fun onLinearAcceleration(x: Float, y: Float, z: Float, nowMs: Long): Boolean {
+    fun onLinearAcceleration(
+        x: Float, y: Float, z: Float, nowMs: Long,
+        torchIsOn: Boolean = false
+    ): Boolean {
         val before = phase()
         val force = magnitude(x, y, z)
         val inPlane = isChopPlane(x, y, z)
+        val effectiveThreshold = if (torchIsOn) forceThreshold * OFF_FORCE_MULTIPLIER else forceThreshold
+        val effectiveWindowMs = if (torchIsOn) chopWindowMs + OFF_WINDOW_EXTENSION_MS else chopWindowMs
         val remaining = if (lastToggleMs == NONE) 0L else
             (cooldownMs - (nowMs - lastToggleMs)).coerceAtLeast(0L)
         val gestureAgeMs = if (firstChopMs == NONE) null else nowMs - firstChopMs
@@ -82,27 +97,28 @@ class ChopDetector(
             traceListener?.let { listener ->
                 try {
                     listener(Trace(reason, before, phase(), nowMs, force, inPlane,
-                        firstChopMs, lastToggleMs, forceThreshold, chopWindowMs, remaining, expired, gestureAgeMs))
+                        firstChopMs, lastToggleMs, effectiveThreshold, effectiveWindowMs,
+                        remaining, expired, gestureAgeMs, torchIsOn))
                 } catch (_: Exception) { /* An observer must never change torch behavior. */ }
             }
             return accepted
         }
         if (lastToggleMs != NONE && nowMs - lastToggleMs < cooldownMs)
             return result("COOLDOWN_ACTIVE")
-        if (firstChopMs != NONE && nowMs - firstChopMs > chopWindowMs) {
+        if (firstChopMs != NONE && nowMs - firstChopMs > effectiveWindowMs) {
             expired = true
             reset()
         }
         when {
             firstChopMs == NONE -> {
                 if (!inPlane) return result("WRONG_MOTION_PLANE")
-                if (force < forceThreshold) return result("BELOW_FORCE_THRESHOLD")
+                if (force < effectiveThreshold) return result("BELOW_FORCE_THRESHOLD")
                 firstChopMs = nowMs
                 awaitingValley = true
                 return result("FIRST_CHOP_RECORDED")
             }
             awaitingValley -> {
-                if (force < forceThreshold * VALLEY_RATIO) {
+                if (force < effectiveThreshold * VALLEY_RATIO) {
                     awaitingValley = false
                     return result("VALLEY_RECORDED")
                 }
@@ -110,7 +126,7 @@ class ChopDetector(
             }
             else -> {
                 if (!inPlane) return result("WRONG_MOTION_PLANE")
-                if (force < forceThreshold) return result("WAITING_SECOND_CHOP_BELOW_THRESHOLD")
+                if (force < effectiveThreshold) return result("WAITING_SECOND_CHOP_BELOW_THRESHOLD")
                 if (nowMs - firstChopMs >= MIN_SECOND_CHOP_GAP_MS) {
                     lastToggleMs = nowMs
                     reset()
