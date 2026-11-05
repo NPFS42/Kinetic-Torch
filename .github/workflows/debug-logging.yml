@@ -2,6 +2,8 @@ name: Kinetic Torch 1.3.3 source validation
 on:
   push:
     branches: [main, feature/motorola-defaults-reset-20261103]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
