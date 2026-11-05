@@ -145,6 +145,7 @@ class ChopDetectionService : Service(), SensorEventListener {
     private var pendingLedRequest: Long? = null
     private var pendingLedTarget: Boolean? = null
     private var confirmedLedState: Boolean? = null
+    private var pendingOffHapticRunnable: Runnable? = null
     private fun trace(name: String, reason: String, vararg fields: Pair<String, Any?>) {
         DebugLog.event(name, "reason" to reason, "gesture_id" to gestureId,
             "active_light" to activeLightSource, "led_owned" to hardwareLedOwnedByUs,
@@ -237,7 +238,13 @@ class ChopDetectionService : Service(), SensorEventListener {
                 "camera_id" to cameraId, "enabled" to enabled,
                 "pending_request_id" to pendingLedRequest, "requested_target" to pendingLedTarget)
             if (cameraId != flashCameraId) return
+            val confirmedOwnOffRequest = if (!enabled && pendingLedTarget == false) pendingLedRequest else null
             confirmedLedState = enabled
+            if (enabled) {
+                // A new ON transition must not deliver an old delayed OFF vibration.
+                pendingOffHapticRunnable?.let(mainHandler::removeCallbacks)
+                pendingOffHapticRunnable = null
+            }
             if (pendingLedRequest != null && pendingLedTarget == enabled) {
                 trace("led_request_confirmed", "CALLBACK_MATCHED_REQUEST", "request_id" to pendingLedRequest,
                     "enabled" to enabled)
@@ -261,12 +268,17 @@ class ChopDetectionService : Service(), SensorEventListener {
                     scheduleScreenOffWindow()
                 }
             }
+            if (confirmedOwnOffRequest != null) {
+                scheduleConfirmedOffHaptic(confirmedOwnOffRequest)
+            }
         }
 
         override fun onTorchModeUnavailable(cameraId: String) {
             trace("led_unavailable", "OS_CAMERA_RESOURCE_UNAVAILABLE", "camera_id" to cameraId,
                 "pending_request_id" to pendingLedRequest)
             if (cameraId == flashCameraId) {
+                pendingOffHapticRunnable?.let(mainHandler::removeCallbacks)
+                pendingOffHapticRunnable = null
                 confirmedLedState = null
                 pendingLedRequest = null
                 pendingLedTarget = null
@@ -565,11 +577,17 @@ class ChopDetectionService : Service(), SensorEventListener {
                 if (pendingLedRequest == requestId) trace("led_confirmation_timeout",
                     "NO_MATCHING_OS_CALLBACK_OBSERVED", "request_id" to requestId, "target" to targetState)
             }, 1500L)
-            // Note: torchCallback.onTorchModeChanged will authoritatively confirm activeLightSource,
-            // but we also set optimistic state here and trigger haptics immediately.
+            // The ON haptic works and stays immediate. OFF must wait until the OS confirms
+            // the LED actually switched off, then allow the torch/notification transition to settle.
             activeLightSource = if (targetState) ActiveLightSource.HARDWARE_LED else ActiveLightSource.NONE
             hardwareLedOwnedByUs = targetState
-            triggerHapticConfirmation(targetState)
+            if (targetState) {
+                pendingOffHapticRunnable?.let(mainHandler::removeCallbacks)
+                pendingOffHapticRunnable = null
+                triggerHapticConfirmation(true)
+            } else {
+                trace("haptic_off_deferred", "WAITING_FOR_LED_OFF_CALLBACK", "request_id" to requestId)
+            }
             if (targetState) {
                 mainHandler.removeCallbacks(sleepSensorsRunnable)
                 scheduleAutoShutoff()
@@ -681,9 +699,31 @@ class ChopDetectionService : Service(), SensorEventListener {
     }
 
     /**
-     * A double pulse confirms ON and a single short pulse confirms OFF. This runs only from the
-     * torch-toggle paths, not the asynchronous camera callback, avoiding duplicate feedback.
-     * If the vibrator is missing or blocked, the torch operation must still succeed.
+     * Only a matching pending OFF request can schedule this haptic, so unrelated camera
+     * callbacks cannot vibrate. A brief delay avoids racing Android's LED-off transition.
+     */
+    private fun scheduleConfirmedOffHaptic(requestId: Long) {
+        pendingOffHapticRunnable?.let(mainHandler::removeCallbacks)
+        val task = Runnable {
+            pendingOffHapticRunnable = null
+            if (confirmedLedState == false && !isAnyTorchActive() && ledRequestId == requestId) {
+                trace("haptic_off_confirmed", "LED_OFF_AND_SETTLED", "request_id" to requestId,
+                    "delay_ms" to TorchHapticPatterns.CONFIRMED_OFF_HAPTIC_DELAY_MS)
+                triggerHapticConfirmation(false)
+            } else {
+                trace("haptic_off_suppressed", "LED_REACTIVATED_OR_STATE_CHANGED",
+                    "request_id" to requestId, "confirmed_led" to confirmedLedState)
+            }
+        }
+        pendingOffHapticRunnable = task
+        trace("haptic_off_scheduled", "WAITING_AFTER_LED_CONFIRMATION", "request_id" to requestId,
+            "delay_ms" to TorchHapticPatterns.CONFIRMED_OFF_HAPTIC_DELAY_MS)
+        mainHandler.postDelayed(task, TorchHapticPatterns.CONFIRMED_OFF_HAPTIC_DELAY_MS)
+    }
+
+    /**
+     * Working ON: two 240 ms default-amplitude pulses. OFF: one stronger 220 ms pulse.
+     * Both calls fail open so a haptic issue cannot interrupt flashlight control.
      */
     private fun triggerHapticConfirmation(turnedOn: Boolean) {
         trace("haptic_request", if (turnedOn) "DOUBLE_PULSE_ON" else "SINGLE_PULSE_OFF",
@@ -703,8 +743,12 @@ class ChopDetectionService : Service(), SensorEventListener {
             val effect = if (turnedOn) {
                 VibrationEffect.createWaveform(TorchHapticPatterns.activationTimingsMs(), -1)
             } else {
-                // Match the known-working ON pathway: one pulse, no repetition.
-                VibrationEffect.createWaveform(TorchHapticPatterns.deactivationTimingsMs(), -1)
+                // Explicit amplitude rather than relying on the device default haptic scale.
+                VibrationEffect.createWaveform(
+                    TorchHapticPatterns.deactivationTimingsMs(),
+                    TorchHapticPatterns.deactivationAmplitudes(),
+                    -1
+                )
             }
             vibrator.vibrate(effect)
             trace("haptic_submitted", if (turnedOn) "DOUBLE_PULSE_ON" else "SINGLE_PULSE_OFF",
@@ -799,6 +843,8 @@ class ChopDetectionService : Service(), SensorEventListener {
         mainHandler.removeCallbacks(autoShutoffRunnable)
         mainHandler.removeCallbacks(sleepSensorsRunnable)
         mainHandler.removeCallbacks(screenTorchLaunchCheck)
+        pendingOffHapticRunnable?.let(mainHandler::removeCallbacks)
+        pendingOffHapticRunnable = null
 
         // Only switch the LED off if we switched it on; leave a flashlight someone else started alone.
         if (hardwareLedOwnedByUs) {
