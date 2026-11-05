@@ -728,8 +728,13 @@ class ChopDetectionService : Service(), SensorEventListener {
      * Both calls fail open so a haptic issue cannot interrupt flashlight control.
      */
     private fun triggerHapticConfirmation(turnedOn: Boolean) {
-        trace("haptic_request", if (turnedOn) "DOUBLE_PULSE_ON" else "SINGLE_PULSE_OFF",
-            "target" to turnedOn)
+        val pattern = when {
+            turnedOn -> "DOUBLE_PULSE_ON"
+            BuildConfig.DIAGNOSTICS_ENABLED -> "DOUBLE_PULSE_OFF_PROBE"
+            else -> "SINGLE_PULSE_OFF"
+        }
+        trace("haptic_request", pattern,
+            "target" to turnedOn, "off_probe" to (!turnedOn && BuildConfig.DIAGNOSTICS_ENABLED))
         try {
             val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val vm = getSystemService(VIBRATOR_MANAGER_SERVICE) as VibratorManager
@@ -742,19 +747,23 @@ class ChopDetectionService : Service(), SensorEventListener {
                 trace("haptic_skipped", "NO_VIBRATOR_AVAILABLE")
                 return
             }
-            val effect = if (turnedOn) {
-                VibrationEffect.createWaveform(TorchHapticPatterns.activationTimingsMs(), -1)
-            } else {
-                // Explicit amplitude rather than relying on the device default haptic scale.
-                VibrationEffect.createWaveform(
+            val effect = when {
+                turnedOn -> VibrationEffect.createWaveform(TorchHapticPatterns.activationTimingsMs(), -1)
+                BuildConfig.DIAGNOSTICS_ENABLED -> {
+                    // Isolate effect shape from torch state. Use the identical known-working ON
+                    // effect when OFF: this is intentionally TWO pulses in test builds only.
+                    VibrationEffect.createWaveform(TorchHapticPatterns.diagnosticOffProbeTimingsMs(), -1)
+                }
+                else -> VibrationEffect.createWaveform(
                     TorchHapticPatterns.deactivationTimingsMs(),
                     TorchHapticPatterns.deactivationAmplitudes(),
                     -1
                 )
             }
             vibrator.vibrate(effect)
-            trace("haptic_submitted", if (turnedOn) "DOUBLE_PULSE_ON" else "SINGLE_PULSE_OFF",
-                "target" to turnedOn, "vibrator_available" to true)
+            trace("haptic_submitted", pattern,
+                "target" to turnedOn, "vibrator_available" to true,
+                "off_probe" to (!turnedOn && BuildConfig.DIAGNOSTICS_ENABLED))
         } catch (error: Exception) {
             trace("haptic_failed", error.javaClass.simpleName, "message" to error.message)
         }
