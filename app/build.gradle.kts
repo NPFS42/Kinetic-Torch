@@ -11,7 +11,7 @@ android {
         applicationId = "com.npfs.stars.kinetictorch"
         minSdk = 26
         targetSdk = 36
-        versionCode = 12
+        versionCode = 13
         versionName = "1.3.2"
         buildConfigField("boolean", "DIAGNOSTICS_ENABLED", "false")
     }
@@ -35,7 +35,7 @@ android {
         debug {
             buildConfigField("boolean", "DIAGNOSTICS_ENABLED", "true")
             applicationIdSuffix = ".debug"
-            versionNameSuffix = "-test-rc2"
+            versionNameSuffix = "-test-rc3"
         }
         release {
             isMinifyEnabled = true
