@@ -17,5 +17,12 @@ Per Google's [Device catalog documentation](https://support.google.com/googlepla
 
 The Reset Sliders button restores only these four settings, not the arm switch, screen-torch selection, notification prompts, or cooldown. Existing user choices survive app upgrades. The gesture defaults are known to work on the owner's device; cross-device validation is still required.
 
+## Vibration confirmation (requested)
+- ON: two 60 ms pulses separated by a 90 ms silence.
+- OFF: one 55 ms pulse.
+- A haptic is emitted from the actual LED/screen torch toggle path, not from the asynchronous camera LED callback, so matching callbacks don't double-vibrate.
+- A missing, disabled, or failing vibrator must not interrupt flashlight toggling. Neither a boot restart nor settings changes should vibrate.
+- Test both LED and screen torch modes on hardware: successful double-chop ON yields two pulses, successful double-chop OFF yields one pulse, failed activation produces no success signal, and automatic safety shutoff behavior remains unchanged.
+
 ## Source/release caveat
 This change is based on `debug-logging`, which contains the current diagnostic source. Do not ship it as an APK/AAB without reconciling it with the owner's installed working 1.3.1 production build (code 10), verifying the signing key and increasing the Play version code above 10. No released artifact is produced by this change alone.
