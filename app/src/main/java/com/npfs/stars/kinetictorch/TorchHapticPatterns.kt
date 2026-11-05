@@ -13,4 +13,7 @@ internal object TorchHapticPatterns {
     fun activationTimingsMs(): LongArray = longArrayOf(
         0L, ACTIVATION_PULSE_MS, ACTIVATION_GAP_MS, ACTIVATION_PULSE_MS
     )
+
+    // A single pulse using the same createWaveform API already verified for ON on-device.
+    fun deactivationTimingsMs(): LongArray = longArrayOf(0L, DEACTIVATION_PULSE_MS)
 }
