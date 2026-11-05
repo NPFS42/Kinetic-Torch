@@ -25,6 +25,7 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
+import android.os.VibrationAttributes
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -728,13 +729,9 @@ class ChopDetectionService : Service(), SensorEventListener {
      * Both calls fail open so a haptic issue cannot interrupt flashlight control.
      */
     private fun triggerHapticConfirmation(turnedOn: Boolean) {
-        val pattern = when {
-            turnedOn -> "DOUBLE_PULSE_ON"
-            BuildConfig.DIAGNOSTICS_ENABLED -> "DOUBLE_PULSE_OFF_PROBE"
-            else -> "SINGLE_PULSE_OFF"
-        }
-        trace("haptic_request", pattern,
-            "target" to turnedOn, "off_probe" to (!turnedOn && BuildConfig.DIAGNOSTICS_ENABLED))
+        val pattern = if (turnedOn) "DOUBLE_PULSE_ON" else "SINGLE_PULSE_OFF"
+        trace("haptic_request", pattern, "target" to turnedOn,
+            "usage" to if (turnedOn) "LEGACY_DEFAULT" else "HARDWARE_FEEDBACK")
         try {
             val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val vm = getSystemService(VIBRATOR_MANAGER_SERVICE) as VibratorManager
@@ -747,23 +744,29 @@ class ChopDetectionService : Service(), SensorEventListener {
                 trace("haptic_skipped", "NO_VIBRATOR_AVAILABLE")
                 return
             }
-            val effect = when {
-                turnedOn -> VibrationEffect.createWaveform(TorchHapticPatterns.activationTimingsMs(), -1)
-                BuildConfig.DIAGNOSTICS_ENABLED -> {
-                    // Isolate effect shape from torch state. Use the identical known-working ON
-                    // effect when OFF: this is intentionally TWO pulses in test builds only.
-                    VibrationEffect.createWaveform(TorchHapticPatterns.diagnosticOffProbeTimingsMs(), -1)
-                }
-                else -> VibrationEffect.createWaveform(
+            val effect = if (turnedOn) {
+                // Leave the working ON pathway exactly as before.
+                VibrationEffect.createWaveform(TorchHapticPatterns.activationTimingsMs(), -1)
+            } else {
+                VibrationEffect.createWaveform(
                     TorchHapticPatterns.deactivationTimingsMs(),
-                    TorchHapticPatterns.deactivationAmplitudes(),
-                    -1
+                    TorchHapticPatterns.deactivationAmplitudes(), -1
                 )
             }
-            vibrator.vibrate(effect)
+            if (!turnedOn && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                // Android may silently ignore UNKNOWN-usage vibration from a non-visible app,
+                // even if the native API returns. Hardware feedback is a policy-permitted
+                // usage for a hardware control, including in background and battery saver.
+                val attrs = VibrationAttributes.Builder()
+                    .setUsage(VibrationAttributes.USAGE_HARDWARE_FEEDBACK).build()
+                vibrator.vibrate(effect, attrs)
+            } else {
+                vibrator.vibrate(effect)
+            }
             trace("haptic_submitted", pattern,
                 "target" to turnedOn, "vibrator_available" to true,
-                "off_probe" to (!turnedOn && BuildConfig.DIAGNOSTICS_ENABLED))
+                "usage" to if (!turnedOn && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                    "HARDWARE_FEEDBACK" else "LEGACY_DEFAULT")
         } catch (error: Exception) {
             trace("haptic_failed", error.javaClass.simpleName, "message" to error.message)
         }
