@@ -21,4 +21,9 @@ internal object TorchHapticPatterns {
 
     // Only the OFF effect is made explicit; preserve the previously working double-ON pattern.
     fun deactivationAmplitudes(): IntArray = intArrayOf(0, DEACTIVATION_AMPLITUDE)
+
+    fun shouldDeliverConfirmedOff(
+        confirmedLedState: Boolean?, torchActive: Boolean,
+        requestId: Long, latestRequestId: Long
+    ): Boolean = confirmedLedState == false && !torchActive && requestId == latestRequestId
 }
