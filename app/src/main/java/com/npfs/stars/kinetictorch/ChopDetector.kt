@@ -41,6 +41,10 @@ class ChopDetector(
         /** In-plane (x/y) motion must be at least this fraction of z motion to count as a chop. */
         const val PLANE_RATIO = 0.7f
 
+        /** Pocket guard must block ON but must never prevent shutting a lit torch OFF. */
+        fun shouldBlockByProximity(pocketCovered: Boolean, torchIsOn: Boolean): Boolean =
+            pocketCovered && !torchIsOn
+
         private const val NONE = -1L
 
         fun magnitude(x: Float, y: Float, z: Float): Float = sqrt(x * x + y * y + z * z)
