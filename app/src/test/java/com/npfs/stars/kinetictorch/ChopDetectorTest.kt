@@ -165,6 +165,32 @@ class ChopDetectorTest {
     }
 
     @Test
+    fun recoilSpikeRequiresAnotherQuietValleyBeforeSecondChop() {
+        // A strong deceleration recoil at 160 ms cannot masquerade as chop #2.
+        assertFalse(planar(0, 25f))
+        quiet(20, 140)
+        assertFalse(planar(160, 25f))
+        quiet(180, 280)
+        // Genuine second movement remains eligible inside the original window.
+        assertTrue(planar(320, 25f))
+    }
+
+    @Test
+    fun loweredThresholdAllowsDeliberateOffGestureAfterCooldown() {
+        detector = ChopDetector(forceThreshold = 12f, chopWindowMs = 750L, cooldownMs = 1000L)
+        assertFalse(planar(0, 12.5f))
+        quiet(20, 180)
+        assertTrue(planar(300, 12.5f))
+
+        // Service may lower the effective threshold when the light is on.
+        detector.forceThreshold = 9f
+        assertFalse(planar(700, 10f)) // still inside previous toggle cooldown
+        assertFalse(planar(1400, 10f))
+        quiet(1420, 1620)
+        assertTrue(planar(1700, 10f))
+    }
+
+    @Test
     fun chopPlaneHelper() {
         assertTrue(ChopDetector.isChopPlane(10f, 0f, 5f))
         assertFalse(ChopDetector.isChopPlane(1f, 1f, 30f))
