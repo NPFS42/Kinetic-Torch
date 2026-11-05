@@ -703,12 +703,12 @@ class ChopDetectionService : Service(), SensorEventListener {
             val effect = if (turnedOn) {
                 VibrationEffect.createWaveform(TorchHapticPatterns.activationTimingsMs(), -1)
             } else {
-                VibrationEffect.createOneShot(
-                    TorchHapticPatterns.DEACTIVATION_PULSE_MS,
-                    VibrationEffect.DEFAULT_AMPLITUDE
-                )
+                // Match the known-working ON pathway: one pulse, no repetition.
+                VibrationEffect.createWaveform(TorchHapticPatterns.deactivationTimingsMs(), -1)
             }
             vibrator.vibrate(effect)
+            trace("haptic_submitted", if (turnedOn) "DOUBLE_PULSE_ON" else "SINGLE_PULSE_OFF",
+                "target" to turnedOn, "vibrator_available" to true)
         } catch (error: Exception) {
             trace("haptic_failed", error.javaClass.simpleName, "message" to error.message)
         }
