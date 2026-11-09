@@ -137,6 +137,13 @@
             android:text="Grant Unrestricted Battery (Samsung / OEM)" />
 
 
+        <Button
+            android:id="@+id/btnSourceAndLicense"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:text="@string/source_license_button" />
+
         <LinearLayout
             android:id="@+id/debugPanel"
             android:layout_width="match_parent"
