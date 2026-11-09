@@ -35,3 +35,9 @@ GNU AGPL version 3 only (`AGPL-3.0-only`); see [LICENSE](LICENSE) and [LICENSE-S
 ## License (updated 2026-11-08)
 
 Original project-owned software source uses **GNU AGPL version 3 only** (`AGPL-3.0-only`). See [LICENSE](LICENSE) and [license scope and third-party exclusions](LICENSE-SCOPE.md). Prior grants remain valid for historical releases; separate media, names, trademarks, personal/business records and third-party components are not relicensed. This metadata change does not deploy or release software.
+
+## AGPL Android source access and release gate
+
+The current Android settings screen includes a **Source code & AGPLv3 license** button. It opens the public source repository using a user-initiated browser intent and does not grant the app network permissions. The complete AGPLv3 text is packaged in `app/src/main/assets/COPYING`.
+
+Future signed APK/AAB releases must be matched to an exact tagged source revision, with dependency notices and a clean source package. See [AGPL release gate](docs/AGPL_RELEASE_GATE.md). These source changes are not an Android release; earlier GPLv3 releases keep their prior grants.
