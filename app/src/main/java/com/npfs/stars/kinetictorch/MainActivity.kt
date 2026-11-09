@@ -170,6 +170,16 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         val btnResetSliders = findViewById<Button>(R.id.btnResetSliders)
         val btnAddQsTile = findViewById<Button>(R.id.btnAddQuickSettingsTile)
         val btnBatteryExempt = findViewById<Button>(R.id.btnBatteryExemption)
+        // Source access is user-initiated; no network permission or background request.
+        findViewById<Button>(R.id.btnSourceAndLicense).setOnClickListener {
+            try {
+                startActivity(
+                    Intent(Intent.ACTION_VIEW, "https://github.com/NPFS42/Kinetic-Torch".toUri())
+                )
+            } catch (_: android.content.ActivityNotFoundException) {
+                Toast.makeText(this, R.string.source_license_unavailable, Toast.LENGTH_LONG).show()
+            }
+        }
         findViewById<View>(R.id.debugPanel).visibility = if (BuildConfig.DIAGNOSTICS_ENABLED) View.VISIBLE else View.GONE
         findViewById<Button>(R.id.btnExportDebugLog).setOnClickListener {
             exportLogLauncher.launch("kinetic-torch-debug-${System.currentTimeMillis()}.jsonl")
