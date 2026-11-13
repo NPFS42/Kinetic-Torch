@@ -49,6 +49,7 @@
             android:textSize="16sp"
             android:paddingVertical="6dp" />
 
+        <!-- DEPRECATED: White-screen fallback removed from the active settings UI.
         <com.google.android.material.materialswitch.MaterialSwitch
             android:id="@+id/switchScreenTorchFallback"
             android:layout_width="match_parent"
@@ -57,6 +58,7 @@
             android:textColor="#E0E0E0"
             android:textSize="14sp"
             android:paddingVertical="6dp" />
+        -->
 
         <TextView
             android:id="@+id/txtForceValue"

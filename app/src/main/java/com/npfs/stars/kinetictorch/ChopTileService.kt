@@ -26,6 +26,15 @@ class ChopTileService : TileService() {
             syncTileState()
             return
         }
+        if (!DeviceEligibility.hasHardwareFlash(this)) {
+            getSharedPreferences(ChopDetectionService.PREFS_NAME, MODE_PRIVATE).edit {
+                putBoolean(ChopDetectionService.KEY_SERVICE_ENABLED, false)
+            }
+            stopService(Intent(this, ChopDetectionService::class.java))
+            Toast.makeText(this, R.string.led_required_message, Toast.LENGTH_LONG).show()
+            syncTileState()
+            return
+        }
         val prefs = getSharedPreferences(ChopDetectionService.PREFS_NAME, MODE_PRIVATE)
         val currentlyEnabled = prefs.getBoolean(ChopDetectionService.KEY_SERVICE_ENABLED, false)
         val newState = !currentlyEnabled
@@ -47,6 +56,12 @@ class ChopTileService : TileService() {
         if (DeviceEligibility.isMotorolaDevice()) {
             tile.state = Tile.STATE_UNAVAILABLE
             tile.label = getString(R.string.motorola_tile_label)
+            tile.updateTile()
+            return
+        }
+        if (!DeviceEligibility.hasHardwareFlash(this)) {
+            tile.state = Tile.STATE_UNAVAILABLE
+            tile.label = getString(R.string.led_required_tile_label)
             tile.updateTile()
             return
         }

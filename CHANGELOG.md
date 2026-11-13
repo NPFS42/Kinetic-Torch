@@ -1,3 +1,16 @@
+# 1.3.4 — Unreleased (LED-only deprecation)
+
+- Deprecated the white-screen fallback without deleting its source. The UI switch, activity
+  manifest registration, full-screen intent permission, notification channel, auto-fallback,
+  and service activation pathways are now disabled/commented out.
+- Ignore previously stored white-screen preferences. No-flash devices cannot arm the service,
+  including through Quick Settings and automatic boot restoration.
+- A busy or unavailable camera LED now reports the problem instead of opening the screen.
+- Updated manifest hardware requirement to a physical flash LED and revised the FGS subtype.
+- VersionCode 19 / versionName 1.3.4. Requires test and new signed AAB; not yet distributed.
+
+---
+
 # 1.3.3 — November 5, 2026
 
 ## Tested changes

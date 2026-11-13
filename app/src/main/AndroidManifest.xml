@@ -11,15 +11,17 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- Power, Boot, Haptics, Lock-Screen Screen Torch Full-Screen Intent, and OEM Battery Bypass -->
+    <!-- Power, Boot, Haptics, and OEM Battery Bypass -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- DEPRECATED: Screen Torch full-screen launches are disabled for LED-only releases.
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    -->
 
-    <!-- Flash is optional (required="false") because devices without an LED use 100% White Screen Torch mode -->
-    <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
+    <!-- LED-only: devices without hardware flash are no longer supported. -->
+    <uses-feature android:name="android.hardware.camera.flash" android:required="true" />
     <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="true" />
     <uses-feature android:name="android.hardware.sensor.proximity" android:required="false" />
 
@@ -46,7 +48,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Full-Screen 100% White Max-Brightness Fallback Torch Activity -->
+        <!-- DEPRECATED: preserved for a potential future restoration; not registered in this build.
         <activity
             android:name=".ScreenTorchActivity"
             android:exported="false"
@@ -56,6 +58,7 @@
             android:showWhenLocked="true"
             android:turnScreenOn="true"
             android:theme="@style/Theme.KineticTorch.FullScreenWhite" />
+        -->
 
         <!-- Core Chop Detection Foreground Service (Android 14+ specialUse) -->
         <service
@@ -65,7 +68,7 @@
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="User-armed local accelerometer gesture detection to toggle hardware flashlight or screen torch via double-chop motion." />
+                android:value="User-armed local accelerometer gesture detection to toggle the hardware LED flashlight via double-chop motion." />
         </service>
 
         <!-- Quick Settings Tile Service -->

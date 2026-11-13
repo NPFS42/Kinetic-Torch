@@ -1,7 +1,6 @@
 package com.npfs.stars.kinetictorch
 
 import android.Manifest
-import android.app.NotificationManager
 import android.app.StatusBarManager
 import android.content.ComponentName
 import android.content.Context
@@ -86,24 +85,29 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             if (!granted) {
                 Toast.makeText(
                     this,
-                    "Notifications are off, so the Disarm button and the lock-screen Screen Torch alert " +
-                            "can't appear. Enable them in system Settings > Apps > Kinetic Torch.",
+                    "Notifications are off, so the Disarm button can't appear. " +
+                            "Enable notifications in system Settings > Apps > Kinetic Torch.",
                     Toast.LENGTH_LONG
                 ).show()
             }
-            promptFullScreenIntentPermissionIfNeeded(force = false)
         }
 
     private val serviceToggleListener = CompoundButton.OnCheckedChangeListener { _, checked ->
         DebugLog.event("ui_arm_toggle", "reason" to if (checked) "USER_ARMED" else "USER_DISARMED")
-        prefs.edit { putBoolean(ChopDetectionService.KEY_SERVICE_ENABLED, checked) }
-        val intent = Intent(this, ChopDetectionService::class.java)
-        if (checked) {
-            DebugLog.action("ui_start_service") { startForegroundService(intent) }
-            requestNotificationPermissionThenPromptFullScreen()
+        if (checked && !hasLedFlash) {
+            prefs.edit { putBoolean(ChopDetectionService.KEY_SERVICE_ENABLED, false) }
+            Toast.makeText(this, R.string.led_required_message, Toast.LENGTH_LONG).show()
+            refreshServiceSwitch()
         } else {
-            // Calls onDestroy() -> shutdownTorchAndCleanup() to guarantee torch turns off
-            DebugLog.action("ui_stop_service") { stopService(intent) }
+            prefs.edit { putBoolean(ChopDetectionService.KEY_SERVICE_ENABLED, checked) }
+            val intent = Intent(this, ChopDetectionService::class.java)
+            if (checked) {
+                DebugLog.action("ui_start_service") { startForegroundService(intent) }
+                requestNotificationPermissionIfNeeded()
+            } else {
+                // Calls onDestroy() -> shutdownTorchAndCleanup() to guarantee torch turns off
+                DebugLog.action("ui_stop_service") { stopService(intent) }
+            }
         }
     }
 
@@ -153,7 +157,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         val txtHardwareStatus = findViewById<TextView>(R.id.txtHardwareStatus)
         txtLivePeakReadout = findViewById(R.id.txtLivePeakReadout)
         switchService = findViewById(R.id.switchServiceEnable)
-        val switchScreenTorch = findViewById<MaterialSwitch>(R.id.switchScreenTorchFallback)
+        // DEPRECATED: screen torch settings switch removed from the active layout.
+        // val switchScreenTorch = findViewById<MaterialSwitch>(R.id.switchScreenTorchFallback)
 
         val seekForce = findViewById<SeekBar>(R.id.seekForceThreshold)
         val txtForceValue = findViewById<TextView>(R.id.txtForceValue)
@@ -195,12 +200,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         hasLedFlash = (flashId != null)
         val hasProximity = (sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY) != null)
 
-        val ledStatus = if (hasLedFlash) "Rear LED Flash ($flashId)" else "No LED (100% White Screen Torch Active)"
+        val ledStatus = if (hasLedFlash) "Rear LED Flash ($flashId)" else "No flash LED — torch unavailable"
         val proxStatus = if (hasProximity) "Proximity Guard: Ready" else "No Proximity Sensor (Use Screen-Wake Mode)"
         txtHardwareStatus.text = getString(R.string.hardware_status_format, ledStatus, proxStatus)
         DebugLog.event("ui_hardware", "reason" to "HARDWARE_AUDIT", "flash_id" to flashId,
             "has_proximity" to hasProximity)
 
+        /* DEPRECATED: original full-screen white torch configuration, preserved for restoration.
         // Full-Screen 100% White Screen Torch Switch (Auto-locked ON if device has no LED).
         // The full-screen-intent permission page is NOT opened here any more: it is requested when the
         // user arms the service (once) or flips this switch on, never on every app launch.
@@ -217,6 +223,16 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     promptFullScreenIntentPermissionIfNeeded(force = true)
                 }
             }
+        }
+        */
+
+        // An older installation may still have screen-torch preferences saved. Ignore them; if
+        // hardware flash is unavailable, don't arm a gesture service that cannot light anything.
+        if (!hasLedFlash) {
+            prefs.edit { putBoolean(ChopDetectionService.KEY_SERVICE_ENABLED, false) }
+            stopService(Intent(this, ChopDetectionService::class.java))
+            switchService.isEnabled = false
+            btnAddQsTile.isEnabled = false
         }
 
         // 1. Master Service Toggle (state is re-synced from prefs in onResume)
@@ -372,18 +388,17 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         switchService.setOnCheckedChangeListener(serviceToggleListener)
     }
 
-    /** Android 13+ hides the Disarm notification and the lock-screen torch alert without this. */
-    private fun requestNotificationPermissionThenPromptFullScreen() {
+    /** Android 13+ hides the foreground service's Disarm notification without this. */
+    private fun requestNotificationPermissionIfNeeded() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
             PackageManager.PERMISSION_GRANTED
         ) {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        } else {
-            promptFullScreenIntentPermissionIfNeeded(force = false)
         }
     }
 
+    /* DEPRECATED: full-screen-intent permission prompt for the retired white-screen torch.
     /**
      * Opens the "full-screen notifications" settings page (Android 14+) when it is actually needed.
      * Automatic prompts happen at most once; [force] is for an explicit user action.
@@ -411,6 +426,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 "message" to error.message)
         }
     }
+    */
 
     private fun formatAutoOffLabel(minutes: Int): String {
         return if (minutes == 0) {
@@ -426,7 +442,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         DebugLog.event("ui_resumed", "reason" to "CALIBRATION_READOUT_IS_NOT_GESTURE_ACCEPTANCE")
         refreshServiceSwitch()
         // Heal a service that should be armed but isn't running (force-stop, restored settings, OEM kill)
-        if (prefs.getBoolean(ChopDetectionService.KEY_SERVICE_ENABLED, false)) {
+        if (hasLedFlash && prefs.getBoolean(ChopDetectionService.KEY_SERVICE_ENABLED, false)) {
             DebugLog.action("ui_resume_rearm") { startForegroundService(Intent(this, ChopDetectionService::class.java)) }
         }
 
