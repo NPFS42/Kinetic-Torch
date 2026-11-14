@@ -4,8 +4,10 @@
     <string name="tile_label">Chop Torch</string>
     <string name="screen_torch_auto_enabled">100% White Screen Torch (Auto-Enabled: No LED Detected)</string>
     <string name="screen_torch_hint">SCREEN TORCH 100% • DOUBLE-CHOP OR TAP TO TURN OFF</string>
+    <string name="led_required_message">A hardware flash LED is required. White-screen torch mode has been retired.</string>
+    <string name="led_required_tile_label">Hardware flash LED required</string>
     <string name="hardware_status_format">%1$s • %2$s</string>
-    <string name="force_threshold_format">1. Chop Force Threshold: %.1f m/s²</string>
+    <string name="force_threshold_format">Chop force · %.1f m/s²</string>
     <string name="live_peak_format">Live Chop-Plane Peak: %1$.1f m/s² [%2$s]</string>
     <string name="reset_sliders_button">Reset sliders to defaults</string>
     <string name="reset_sliders_done">Slider defaults restored</string>

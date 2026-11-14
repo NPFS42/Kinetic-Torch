@@ -17,7 +17,7 @@ class DeviceEligibilityTest {
     }
 
     @Test fun defaultsFitSliderRanges() {
-        assertTrue(TorchDefaults.FORCE_THRESHOLD in 10.0f..35.0f)
+        assertTrue(TorchDefaults.FORCE_THRESHOLD in TorchDefaults.FORCE_MIN..TorchDefaults.FORCE_MAX)
         assertTrue(TorchDefaults.CHOP_WINDOW_MS in 300..1000)
         assertTrue(TorchDefaults.AUTO_OFF_MINUTES in 0..30)
         assertTrue(TorchDefaults.WAKE_MODE in 0..5)

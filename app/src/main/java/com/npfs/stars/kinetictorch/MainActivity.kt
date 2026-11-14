@@ -1,7 +1,6 @@
 package com.npfs.stars.kinetictorch
 
 import android.Manifest
-import android.app.NotificationManager
 import android.app.StatusBarManager
 import android.content.ComponentName
 import android.content.Context
@@ -16,17 +15,22 @@ import android.hardware.SensorManager
 import android.hardware.camera2.CameraManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.Settings
+import android.view.MotionEvent
 import android.view.View
 import android.widget.Button
 import android.widget.CompoundButton
+import android.widget.EditText
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.core.net.toUri
@@ -39,10 +43,18 @@ import java.util.concurrent.Executors
 class MainActivity : AppCompatActivity(), SensorEventListener {
 
     private lateinit var prefs: SharedPreferences
+    private lateinit var profiles: TorchProfileStore
     private lateinit var sensorManager: SensorManager
     private lateinit var cameraManager: CameraManager
     private lateinit var txtLivePeakReadout: TextView
     private lateinit var switchService: MaterialSwitch
+    private lateinit var btnSettingsLock: Button
+    private lateinit var btnRestoreProfile: Button
+    private lateinit var txtSettingsLockStatus: TextView
+    private var configurableViews: List<View> = emptyList()
+    private val unlockHandler = Handler(Looper.getMainLooper())
+    private var pendingUnlock: Runnable? = null
+    private var consumeUnlockRelease = false
     private var hasLedFlash = false
     private var sessionPeakAccel = 0.0f
     private var currentThreshold = TorchDefaults.FORCE_THRESHOLD
@@ -86,24 +98,29 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             if (!granted) {
                 Toast.makeText(
                     this,
-                    "Notifications are off, so the Disarm button and the lock-screen Screen Torch alert " +
-                            "can't appear. Enable them in system Settings > Apps > Kinetic Torch.",
+                    "Notifications are off, so the Disarm button can't appear. " +
+                            "Enable notifications in system Settings > Apps > Kinetic Torch.",
                     Toast.LENGTH_LONG
                 ).show()
             }
-            promptFullScreenIntentPermissionIfNeeded(force = false)
         }
 
     private val serviceToggleListener = CompoundButton.OnCheckedChangeListener { _, checked ->
         DebugLog.event("ui_arm_toggle", "reason" to if (checked) "USER_ARMED" else "USER_DISARMED")
-        prefs.edit { putBoolean(ChopDetectionService.KEY_SERVICE_ENABLED, checked) }
-        val intent = Intent(this, ChopDetectionService::class.java)
-        if (checked) {
-            DebugLog.action("ui_start_service") { startForegroundService(intent) }
-            requestNotificationPermissionThenPromptFullScreen()
+        if (checked && !hasLedFlash) {
+            prefs.edit { putBoolean(ChopDetectionService.KEY_SERVICE_ENABLED, false) }
+            Toast.makeText(this, R.string.led_required_message, Toast.LENGTH_LONG).show()
+            refreshServiceSwitch()
         } else {
-            // Calls onDestroy() -> shutdownTorchAndCleanup() to guarantee torch turns off
-            DebugLog.action("ui_stop_service") { stopService(intent) }
+            prefs.edit { putBoolean(ChopDetectionService.KEY_SERVICE_ENABLED, checked) }
+            val intent = Intent(this, ChopDetectionService::class.java)
+            if (checked) {
+                DebugLog.action("ui_start_service") { startForegroundService(intent) }
+                requestNotificationPermissionIfNeeded()
+            } else {
+                // Calls onDestroy() -> shutdownTorchAndCleanup() to guarantee torch turns off
+                DebugLog.action("ui_stop_service") { stopService(intent) }
+            }
         }
     }
 
@@ -134,6 +151,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         ViewCompat.requestApplyInsets(settingsScroll)
 
         prefs = getSharedPreferences(ChopDetectionService.PREFS_NAME, MODE_PRIVATE)
+        profiles = TorchProfileStore(prefs)
         sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
         cameraManager = getSystemService(CAMERA_SERVICE) as CameraManager
 
@@ -153,7 +171,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         val txtHardwareStatus = findViewById<TextView>(R.id.txtHardwareStatus)
         txtLivePeakReadout = findViewById(R.id.txtLivePeakReadout)
         switchService = findViewById(R.id.switchServiceEnable)
-        val switchScreenTorch = findViewById<MaterialSwitch>(R.id.switchScreenTorchFallback)
+        // DEPRECATED: screen torch settings switch removed from the active layout.
+        // val switchScreenTorch = findViewById<MaterialSwitch>(R.id.switchScreenTorchFallback)
 
         val seekForce = findViewById<SeekBar>(R.id.seekForceThreshold)
         val txtForceValue = findViewById<TextView>(R.id.txtForceValue)
@@ -168,6 +187,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         val txtWakeModeValue = findViewById<TextView>(R.id.txtWakeModeValue)
 
         val btnResetSliders = findViewById<Button>(R.id.btnResetSliders)
+        val btnSaveProfile = findViewById<Button>(R.id.btnSaveProfile)
+        btnRestoreProfile = findViewById(R.id.btnRestoreProfile)
+        btnSettingsLock = findViewById(R.id.btnSettingsLock)
+        txtSettingsLockStatus = findViewById(R.id.txtSettingsLockStatus)
+        configurableViews = listOf(seekForce, seekWindow, seekAutoOff, seekWakeMode,
+            btnSaveProfile, btnRestoreProfile, btnResetSliders)
         val btnAddQsTile = findViewById<Button>(R.id.btnAddQuickSettingsTile)
         val btnBatteryExempt = findViewById<Button>(R.id.btnBatteryExemption)
         // Source access is user-initiated; no network permission or background request.
@@ -195,12 +220,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         hasLedFlash = (flashId != null)
         val hasProximity = (sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY) != null)
 
-        val ledStatus = if (hasLedFlash) "Rear LED Flash ($flashId)" else "No LED (100% White Screen Torch Active)"
+        val ledStatus = if (hasLedFlash) "Rear LED Flash ($flashId)" else "No flash LED — torch unavailable"
         val proxStatus = if (hasProximity) "Proximity Guard: Ready" else "No Proximity Sensor (Use Screen-Wake Mode)"
         txtHardwareStatus.text = getString(R.string.hardware_status_format, ledStatus, proxStatus)
         DebugLog.event("ui_hardware", "reason" to "HARDWARE_AUDIT", "flash_id" to flashId,
             "has_proximity" to hasProximity)
 
+        /* DEPRECATED: original full-screen white torch configuration, preserved for restoration.
         // Full-Screen 100% White Screen Torch Switch (Auto-locked ON if device has no LED).
         // The full-screen-intent permission page is NOT opened here any more: it is requested when the
         // user arms the service (once) or flips this switch on, never on every app launch.
@@ -218,19 +244,30 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 }
             }
         }
+        */
+
+        // An older installation may still have screen-torch preferences saved. Ignore them; if
+        // hardware flash is unavailable, don't arm a gesture service that cannot light anything.
+        if (!hasLedFlash) {
+            prefs.edit { putBoolean(ChopDetectionService.KEY_SERVICE_ENABLED, false) }
+            stopService(Intent(this, ChopDetectionService::class.java))
+            switchService.isEnabled = false
+            btnAddQsTile.isEnabled = false
+        }
 
         // 1. Master Service Toggle (state is re-synced from prefs in onResume)
         refreshServiceSwitch()
 
-        // 2. Chop Force Threshold Slider (10.0 to 35.0 m/s^2, mapped as progress 0..250)
+        // 2. Chop Force Threshold Slider (5.0 to 35.0 m/s², 0.1 increments).
+        // Earlier builds permitted 5.0; preserve Lucas's validated fast-shake setting.
         currentThreshold = prefs.getFloat(ChopDetectionService.KEY_FORCE_THRESHOLD, TorchDefaults.FORCE_THRESHOLD)
-        seekForce.max = 250
-        seekForce.progress = ((currentThreshold - 10.0f) * 10).toInt().coerceIn(0, 250)
+        seekForce.max = ((TorchDefaults.FORCE_MAX - TorchDefaults.FORCE_MIN) * 10).toInt()
+        seekForce.progress = ((currentThreshold - TorchDefaults.FORCE_MIN) * 10).toInt().coerceIn(0, seekForce.max)
         txtForceValue.text = getString(R.string.force_threshold_format, currentThreshold)
 
         seekForce.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                currentThreshold = 10.0f + (progress / 10.0f)
+                currentThreshold = TorchDefaults.FORCE_MIN + (progress / 10.0f)
                 txtForceValue.text = getString(R.string.force_threshold_format, currentThreshold)
                 if (!suppressSliderWrites) prefs.edit { putFloat(ChopDetectionService.KEY_FORCE_THRESHOLD, currentThreshold) }
                 sessionPeakAccel = 0.0f
@@ -243,12 +280,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         val savedWindow = prefs.getInt(ChopDetectionService.KEY_CHOP_WINDOW_MS, TorchDefaults.CHOP_WINDOW_MS)
         seekWindow.max = 700
         seekWindow.progress = (savedWindow - 300).coerceIn(0, 700)
-        txtWindowValue.text = "2. Double-Chop Window: ${savedWindow} ms"
+        txtWindowValue.text = "Double-chop window · ${savedWindow} ms"
 
         seekWindow.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 val windowMs = 300 + progress
-                txtWindowValue.text = "2. Double-Chop Window: ${windowMs} ms"
+                txtWindowValue.text = "Double-chop window · ${windowMs} ms"
                 if (!suppressSliderWrites) prefs.edit { putInt(ChopDetectionService.KEY_CHOP_WINDOW_MS, windowMs) }
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
@@ -274,12 +311,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         val savedWakeMode = prefs.getInt(ChopDetectionService.KEY_WAKE_MODE, TorchDefaults.WAKE_MODE).coerceIn(0, 5)
         seekWakeMode.max = 5
         seekWakeMode.progress = savedWakeMode
-        txtWakeModeValue.text = "4. Standby Mode: ${wakeModeLabels[savedWakeMode]}"
+        txtWakeModeValue.text = "Standby mode · ${wakeModeLabels[savedWakeMode]}"
 
         seekWakeMode.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 val mode = progress.coerceIn(0, 5)
-                txtWakeModeValue.text = "4. Standby Mode: ${wakeModeLabels[mode]}"
+                txtWakeModeValue.text = "Standby mode · ${wakeModeLabels[mode]}"
                 if (!suppressSliderWrites) prefs.edit { putInt(ChopDetectionService.KEY_WAKE_MODE, mode) }
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
@@ -288,31 +325,87 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         // Restore only the four visible sliders. Never disarm the service or wipe other settings.
         btnResetSliders.setOnClickListener {
-            prefs.edit {
-                putFloat(ChopDetectionService.KEY_FORCE_THRESHOLD, TorchDefaults.FORCE_THRESHOLD)
-                putInt(ChopDetectionService.KEY_CHOP_WINDOW_MS, TorchDefaults.CHOP_WINDOW_MS)
-                putInt(ChopDetectionService.KEY_AUTO_OFF_MINUTES, TorchDefaults.AUTO_OFF_MINUTES)
-                putInt(ChopDetectionService.KEY_WAKE_MODE, TorchDefaults.WAKE_MODE)
-            }
-            suppressSliderWrites = true
-            try {
-                currentThreshold = TorchDefaults.FORCE_THRESHOLD
-                seekForce.progress = ((TorchDefaults.FORCE_THRESHOLD - 10.0f) * 10).toInt()
-                seekWindow.progress = TorchDefaults.CHOP_WINDOW_MS - 300
-                seekAutoOff.progress = TorchDefaults.AUTO_OFF_MINUTES
-                seekWakeMode.progress = TorchDefaults.WAKE_MODE
-            } finally {
-                suppressSliderWrites = false
-            }
-            txtForceValue.text = getString(R.string.force_threshold_format, TorchDefaults.FORCE_THRESHOLD)
-            txtWindowValue.text = "2. Double-Chop Window: ${TorchDefaults.CHOP_WINDOW_MS} ms"
-            txtAutoOffValue.text = formatAutoOffLabel(TorchDefaults.AUTO_OFF_MINUTES)
-            txtWakeModeValue.text = "4. Standby Mode: ${wakeModeLabels[TorchDefaults.WAKE_MODE]}"
-            sessionPeakAccel = 0f
-            txtLivePeakReadout.text = getString(R.string.live_peak_format, 0f, "Reset")
+            if (profiles.isLocked()) return@setOnClickListener
+            restoreTuning(GestureTuning.defaults())
             DebugLog.event("sliders_reset", "reason" to "USER_RESTORED_DEFAULTS")
             Toast.makeText(this, R.string.reset_sliders_done, Toast.LENGTH_SHORT).show()
         }
+
+        btnSaveProfile.setOnClickListener {
+            if (profiles.isLocked()) return@setOnClickListener
+            val input = EditText(this).apply {
+                setSingleLine(true)
+                setText(profiles.customName())
+                selectAll()
+            }
+            AlertDialog.Builder(this)
+                .setTitle("Save custom profile")
+                .setMessage("Name this calibration. Saving replaces your previous custom profile.")
+                .setView(input)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton("Save") { _, _ ->
+                    profiles.saveCustom(input.text.toString())
+                    refreshSettingsLockUi()
+                    Toast.makeText(this, "Profile saved on this phone", Toast.LENGTH_SHORT).show()
+                    DebugLog.event("profile_saved", "reason" to "USER_SAVED_CUSTOM_PROFILE")
+                }.show()
+        }
+
+        btnRestoreProfile.setOnClickListener { showRestoreOptions() }
+
+        btnSettingsLock.setOnClickListener {
+            if (consumeUnlockRelease) return@setOnClickListener
+            if (profiles.isLocked()) {
+                // Accessibility click alternative to the 2-second touch-and-hold gesture.
+                AlertDialog.Builder(this)
+                    .setTitle("Unlock settings?")
+                    .setMessage("Allow calibration controls to be changed again?")
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .setPositiveButton("Unlock") { _, _ -> unlockSettings() }
+                    .show()
+            } else {
+                profiles.lock() // also saves a recovery snapshot; never changes arm state
+                refreshSettingsLockUi()
+                DebugLog.event("settings_locked", "reason" to "USER_LOCKED_CALIBRATION")
+            }
+        }
+
+        btnSettingsLock.setOnTouchListener { _, motion ->
+            if (consumeUnlockRelease) {
+                if (motion.actionMasked == MotionEvent.ACTION_UP ||
+                    motion.actionMasked == MotionEvent.ACTION_CANCEL) consumeUnlockRelease = false
+                return@setOnTouchListener true
+            }
+            if (!profiles.isLocked()) return@setOnTouchListener false
+            when (motion.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    pendingUnlock?.let(unlockHandler::removeCallbacks)
+                    pendingUnlock = Runnable { unlockSettings(fromHold = true) }.also {
+                        unlockHandler.postDelayed(it, 2000L)
+                    }
+                    txtSettingsLockStatus.text = "Keep holding for 2 seconds to unlock…"
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    pendingUnlock?.let(unlockHandler::removeCallbacks)
+                    pendingUnlock = null
+                    refreshSettingsLockUi()
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    if (motion.x < 0 || motion.x > btnSettingsLock.width ||
+                        motion.y < 0 || motion.y > btnSettingsLock.height) {
+                        pendingUnlock?.let(unlockHandler::removeCallbacks)
+                        pendingUnlock = null
+                        refreshSettingsLockUi()
+                    }
+                    true
+                }
+                else -> true
+            }
+        }
+
+        refreshSettingsLockUi()
 
         // 6. Button to Enable / Add Quick Settings Tile (Android 13+ StatusBarManager API)
         btnAddQsTile.setOnClickListener {
@@ -360,6 +453,72 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
     }
 
+    /** Restore calibration atomically, preserving arm state, permissions, and saved profiles. */
+    private fun restoreTuning(tuning: GestureTuning) {
+        val value = tuning.normalized()
+        profiles.restore(value)
+        suppressSliderWrites = true
+        try {
+            currentThreshold = value.force
+            findViewById<SeekBar>(R.id.seekForceThreshold).progress =
+                ((value.force - TorchDefaults.FORCE_MIN) * 10).toInt()
+            findViewById<SeekBar>(R.id.seekChopWindow).progress = value.windowMs - 300
+            findViewById<SeekBar>(R.id.seekAutoOffMinutes).progress = value.autoOffMinutes
+            findViewById<SeekBar>(R.id.seekWakeMode).progress = value.wakeMode
+        } finally {
+            suppressSliderWrites = false
+        }
+        findViewById<TextView>(R.id.txtForceValue).text =
+            getString(R.string.force_threshold_format, value.force)
+        findViewById<TextView>(R.id.txtWindowValue).text = "Double-chop window · ${value.windowMs} ms"
+        findViewById<TextView>(R.id.txtAutoOffValue).text = formatAutoOffLabel(value.autoOffMinutes)
+        findViewById<TextView>(R.id.txtWakeModeValue).text = "Standby mode · ${wakeModeLabels[value.wakeMode]}"
+        sessionPeakAccel = 0f
+        txtLivePeakReadout.text = getString(R.string.live_peak_format, 0f, "Calibration restored")
+    }
+
+    private fun showRestoreOptions() {
+        if (profiles.isLocked()) return
+        val options = listOfNotNull(
+            profiles.custom()?.let { profiles.customName() to it },
+            profiles.recovery()?.let { "Last locked settings" to it }
+        )
+        if (options.isEmpty()) return
+        AlertDialog.Builder(this)
+            .setTitle("Restore saved settings")
+            .setItems(options.map { it.first }.toTypedArray()) { _, chosen ->
+                val (name, tuning) = options[chosen]
+                AlertDialog.Builder(this)
+                    .setTitle("Restore $name?")
+                    .setMessage("Replace the four current calibration values? Torch arm state will not change.")
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .setPositiveButton("Restore") { _, _ ->
+                        restoreTuning(tuning)
+                        DebugLog.event("profile_restored", "reason" to "USER_RESTORED_CALIBRATION")
+                    }.show()
+            }.show()
+    }
+
+    private fun unlockSettings(fromHold: Boolean = false) {
+        pendingUnlock?.let(unlockHandler::removeCallbacks)
+        pendingUnlock = null
+        consumeUnlockRelease = fromHold
+        profiles.unlock()
+        refreshSettingsLockUi()
+        DebugLog.event("settings_unlocked", "reason" to "USER_UNLOCKED_CALIBRATION")
+    }
+
+    private fun refreshSettingsLockUi() {
+        val locked = profiles.isLocked()
+        configurableViews.forEach { it.isEnabled = !locked }
+        btnRestoreProfile.isEnabled = !locked && (profiles.custom() != null || profiles.recovery() != null)
+        btnSettingsLock.text = if (locked) "🔒 Locked · Hold 2 seconds to unlock" else "🔓 Lock settings"
+        btnSettingsLock.contentDescription = if (locked) "Settings locked. Hold for two seconds to unlock, or activate to confirm unlock"
+            else "Lock and save a recovery snapshot of current settings"
+        txtSettingsLockStatus.text = if (locked) "Protected from accidental changes · Torch control stays available"
+            else "Unlocked · Changes save automatically"
+    }
+
     /**
      * Sync the master switch with the stored state without firing the listener. The service can be
      * disarmed from the notification or the Quick Settings tile while this screen is in the background.
@@ -372,18 +531,17 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         switchService.setOnCheckedChangeListener(serviceToggleListener)
     }
 
-    /** Android 13+ hides the Disarm notification and the lock-screen torch alert without this. */
-    private fun requestNotificationPermissionThenPromptFullScreen() {
+    /** Android 13+ hides the foreground service's Disarm notification without this. */
+    private fun requestNotificationPermissionIfNeeded() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
             PackageManager.PERMISSION_GRANTED
         ) {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        } else {
-            promptFullScreenIntentPermissionIfNeeded(force = false)
         }
     }
 
+    /* DEPRECATED: full-screen-intent permission prompt for the retired white-screen torch.
     /**
      * Opens the "full-screen notifications" settings page (Android 14+) when it is actually needed.
      * Automatic prompts happen at most once; [force] is for an explicit user action.
@@ -411,12 +569,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 "message" to error.message)
         }
     }
+    */
 
     private fun formatAutoOffLabel(minutes: Int): String {
         return if (minutes == 0) {
-            "3. Safety Auto-Shutoff Timer: Disabled (Manual Only)"
+            "Safety auto-shutoff · Disabled (manual only)"
         } else {
-            "3. Safety Auto-Shutoff Timer: $minutes min"
+            "Safety auto-shutoff · $minutes min"
         }
     }
 
@@ -425,8 +584,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         if (DeviceEligibility.isMotorolaDevice()) return
         DebugLog.event("ui_resumed", "reason" to "CALIBRATION_READOUT_IS_NOT_GESTURE_ACCEPTANCE")
         refreshServiceSwitch()
+        refreshSettingsLockUi()
         // Heal a service that should be armed but isn't running (force-stop, restored settings, OEM kill)
-        if (prefs.getBoolean(ChopDetectionService.KEY_SERVICE_ENABLED, false)) {
+        if (hasLedFlash && prefs.getBoolean(ChopDetectionService.KEY_SERVICE_ENABLED, false)) {
             DebugLog.action("ui_resume_rearm") { startForegroundService(Intent(this, ChopDetectionService::class.java)) }
         }
 
@@ -440,9 +600,17 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
 
     override fun onPause() {
+        pendingUnlock?.let(unlockHandler::removeCallbacks)
+        pendingUnlock = null
         DebugLog.event("ui_paused", "reason" to "CALIBRATION_SENSOR_UNREGISTERED")
         sensorManager.unregisterListener(this)
         super.onPause()
+    }
+
+    override fun onDestroy() {
+        pendingUnlock?.let(unlockHandler::removeCallbacks)
+        pendingUnlock = null
+        super.onDestroy()
     }
 
     override fun onSensorChanged(event: SensorEvent?) {

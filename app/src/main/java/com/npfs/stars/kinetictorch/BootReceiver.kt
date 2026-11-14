@@ -9,7 +9,7 @@ class BootReceiver : BroadcastReceiver() {
         DebugLog.start(context)
         val action = intent.action
         DebugLog.event("boot_receiver", "reason" to action)
-        if (DeviceEligibility.isMotorolaDevice()) {
+        if (DeviceEligibility.isMotorolaDevice() || !DeviceEligibility.hasHardwareFlash(context)) {
             context.getSharedPreferences(ChopDetectionService.PREFS_NAME, Context.MODE_PRIVATE)
                 .edit().putBoolean(ChopDetectionService.KEY_SERVICE_ENABLED, false).apply()
             return

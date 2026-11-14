@@ -26,9 +26,13 @@ import androidx.core.view.WindowInsetsControllerCompat
  * Launched via full-screen high-priority notification intent (when locked/backgrounded) or direct
  * intent when a device has no rear camera LED flash unit or when Screen Torch mode is enabled.
  *
+ * DEPRECATED (LED-only release): this activity is retained as source but is not registered in the
+ * manifest or reachable from the service. Do not reactivate without a dedicated policy review.
+ *
  * The torch is only "on" while this screen is showing. However it ends — tap, Back, Home, screen
  * off, or the service asking us to close — the service is told, so its state never drifts.
  */
+@Deprecated("Screen Torch is disabled; retained for reference only")
 class ScreenTorchActivity : AppCompatActivity() {
 
     companion object {

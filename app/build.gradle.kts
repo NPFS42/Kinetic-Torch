@@ -11,8 +11,8 @@ android {
         applicationId = "com.npfs.stars.kinetictorch"
         minSdk = 26
         targetSdk = 36
-        versionCode = 18
-        versionName = "1.3.3"
+        versionCode = 20
+        versionName = "1.3.5"
         buildConfigField("boolean", "DIAGNOSTICS_ENABLED", "false")
     }
 

@@ -1,3 +1,26 @@
+# 1.3.5 — settings protection and interface refresh (unreleased)
+
+- Adds a persistent calibration lock with a two-second touch-and-hold unlock; torch arming and Quick Settings remain usable while locked.
+- Automatically captures a last-locked recovery snapshot; adds one named local custom profile and a confirmation-based restore flow.
+- Restores the 5.0 m/s² lower-force slider setting used successfully by a Samsung tester while retaining existing defaults and detector logic.
+- Redesigns the settings interface with dark translucent cards, a subdued STARS torch-mark background, clearer status, and grouped calibration/actions.
+- Based on the signed but not yet published 1.3.4/code 19 LED-only candidate (`3d7348f`). This is source work only; Android build and hardware acceptance are pending.
+
+---
+
+# 1.3.4 — Unreleased (LED-only deprecation)
+
+- Deprecated the white-screen fallback without deleting its source. The UI switch, activity
+  manifest registration, full-screen intent permission, notification channel, auto-fallback,
+  and service activation pathways are now disabled/commented out.
+- Ignore previously stored white-screen preferences. No-flash devices cannot arm the service,
+  including through Quick Settings and automatic boot restoration.
+- A busy or unavailable camera LED now reports the problem instead of opening the screen.
+- Updated manifest hardware requirement to a physical flash LED and revised the FGS subtype.
+- VersionCode 19 / versionName 1.3.4. Shop PC has signed APK/AAB artifacts from commit `3d7348f`; hardware acceptance and distribution status remain separate checks.
+
+---
+
 # 1.3.3 — November 5, 2026
 
 ## Tested changes

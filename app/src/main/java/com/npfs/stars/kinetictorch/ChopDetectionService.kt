@@ -34,11 +34,7 @@ import androidx.core.content.edit
 
 class ChopDetectionService : Service(), SensorEventListener {
 
-    /**
-     * Explicitly tracks which light source is currently active so fallback from a busy/missing
-     * hardware LED to the 100% White Screen Torch always routes subsequent OFF commands to the
-     * matching implementation.
-     */
+    /** Tracks the physical LED. SCREEN_WHITE is retained only for the deprecated source. */
     enum class ActiveLightSource {
         NONE,
         HARDWARE_LED,
@@ -48,22 +44,22 @@ class ChopDetectionService : Service(), SensorEventListener {
     companion object {
         const val PREFS_NAME = "KineticTorchPrefs"
         const val KEY_SERVICE_ENABLED = "service_enabled"
-        const val KEY_USE_SCREEN_TORCH = "use_screen_torch"     // Full-screen 100% white mode
-        const val KEY_FORCE_THRESHOLD = "force_threshold"       // Default from TorchDefaults (10.0..35.0)
+        const val KEY_USE_SCREEN_TORCH = "use_screen_torch"     // DEPRECATED: old preference ignored
+        const val KEY_FORCE_THRESHOLD = "force_threshold"       // Default from TorchDefaults (5.0..35.0)
         const val KEY_CHOP_WINDOW_MS = "chop_window_ms"         // Default from TorchDefaults (300..1000)
         const val KEY_AUTO_OFF_MINUTES = "auto_off_minutes"     // Default: 10 min (0 = Disabled, 1..30)
         const val KEY_WAKE_MODE = "wake_mode"                   // 0=ScreenOn, 1=15s, 2=30s(Def), 3=2m, 4=10m, 5=AlwaysOn 24/7
         const val KEY_COOLDOWN_MS = "cooldown_ms"               // Default: 1000 ms
-        const val KEY_FSI_PROMPTED = "fsi_prompted"             // Full-screen-intent settings page already shown once
+        const val KEY_FSI_PROMPTED = "fsi_prompted"             // DEPRECATED: historical setting
         const val ACTION_STOP_AND_OFF = "com.npfs.stars.kinetictorch.ACTION_STOP_AND_OFF"
 
         const val CHANNEL_ID = "stars_kinetic_torch_channel"
-        const val SCREEN_TORCH_ALERT_CHANNEL_ID = "stars_screen_torch_fullscreen_channel"
+        const val SCREEN_TORCH_ALERT_CHANNEL_ID = "stars_screen_torch_fullscreen_channel" // DEPRECATED
         const val NOTIFICATION_ID = 1001
-        const val SCREEN_TORCH_NOTIFICATION_ID = 1002
+        const val SCREEN_TORCH_NOTIFICATION_ID = 1002 // DEPRECATED: used to clear legacy alerts
 
-        // How long to wait before concluding Android blocked the screen-torch activity launch
-        private const val SCREEN_TORCH_LAUNCH_CHECK_MS = 1_500L
+        // DEPRECATED: white-screen launch timeout retained as reference.
+        // private const val SCREEN_TORCH_LAUNCH_CHECK_MS = 1_500L
 
         // Proximity readings below this (and below the sensor's max range) count as "covered"
         private const val PROXIMITY_NEAR_CM = 5.0f
@@ -124,7 +120,8 @@ class ChopDetectionService : Service(), SensorEventListener {
     private var sensorsActive = false
 
     // Dynamic sensitivity, power & safety parameters updated live via SharedPreferences listener
-    private var useScreenTorch = false
+    // DEPRECATED: old stored preference must not re-enable screen torch after an upgrade.
+    // private var useScreenTorch = false
     private var autoOffMinutes = 10
     private var wakeMode = 2
 
@@ -150,7 +147,6 @@ class ChopDetectionService : Service(), SensorEventListener {
     private fun trace(name: String, reason: String, vararg fields: Pair<String, Any?>) {
         DebugLog.event(name, "reason" to reason, "gesture_id" to gestureId,
             "active_light" to activeLightSource, "led_owned" to hardwareLedOwnedByUs,
-            "screen_visible" to ScreenTorchActivity.isScreenTorchVisible,
             "pocket_blocked" to isPocketBlocked, "sensors_active" to sensorsActive,
             "interactive" to if (::powerManager.isInitialized) powerManager.isInteractive else null,
             "locked" to if (::keyguardManager.isInitialized) keyguardManager.isKeyguardLocked else null,
@@ -161,16 +157,14 @@ class ChopDetectionService : Service(), SensorEventListener {
     private val gravityFilter = GravityHighPass()
     private val linearBuffer = FloatArray(3)
 
-    /** Any active light, including an LED someone else switched on (used for toggle/off logic). */
+    /** Any active LED, including one someone else switched on (used for toggle/off logic). */
     private fun isAnyTorchActive(): Boolean {
-        return activeLightSource != ActiveLightSource.NONE || ScreenTorchActivity.isScreenTorchVisible
+        return activeLightSource == ActiveLightSource.HARDWARE_LED
     }
 
     /** Light that WE are responsible for: drives auto-shutoff and keeps sensors/wake lock alive. */
     private fun isOwnedTorchActive(): Boolean {
-        return activeLightSource == ActiveLightSource.SCREEN_WHITE ||
-                ScreenTorchActivity.isScreenTorchVisible ||
-                (activeLightSource == ActiveLightSource.HARDWARE_LED && hardwareLedOwnedByUs)
+        return activeLightSource == ActiveLightSource.HARDWARE_LED && hardwareLedOwnedByUs
     }
 
     // Safety Auto-Shutoff Runnable
@@ -190,6 +184,7 @@ class ChopDetectionService : Service(), SensorEventListener {
         }
     }
 
+    /* DEPRECATED: original white-screen launch confirmation retained for future reference.
     // Android 10+ can silently block a background startActivity(); the full-screen-intent alert is
     // then the only way in. If the torch screen never appeared, say so in the status notification.
     private val screenTorchLaunchCheck = Runnable {
@@ -199,10 +194,11 @@ class ChopDetectionService : Service(), SensorEventListener {
             updateNotificationStatus("Screen Torch blocked by Android • tap the alert to open it")
         }
     }
+    */
 
     private var lastStatusText = "Armed • Torch: OFF"
 
-    // Screen State & ScreenTorch Dismissal Receiver
+    // Screen State Receiver (ScreenTorch dismissal branch is deprecated)
     private val systemReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             trace("system_broadcast", intent?.action ?: "NULL_ACTION")
@@ -214,6 +210,7 @@ class ChopDetectionService : Service(), SensorEventListener {
                 Intent.ACTION_SCREEN_OFF -> {
                     scheduleScreenOffWindow()
                 }
+                /* DEPRECATED: white-screen dismissal path.
                 ScreenTorchActivity.ACTION_USER_DISMISSED_SCREEN_TORCH -> {
                     if (activeLightSource == ActiveLightSource.SCREEN_WHITE) {
                         activeLightSource = ActiveLightSource.NONE
@@ -225,6 +222,7 @@ class ChopDetectionService : Service(), SensorEventListener {
                         scheduleScreenOffWindow()
                     }
                 }
+                */
             }
         }
     }
@@ -319,9 +317,8 @@ class ChopDetectionService : Service(), SensorEventListener {
         hasProximityHardware = sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY) != null
 
         prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-        if (flashCameraId == null && !prefs.getBoolean(KEY_USE_SCREEN_TORCH, false)) {
-            prefs.edit { putBoolean(KEY_USE_SCREEN_TORCH, true) }
-        }
+        // DEPRECATED: do not automatically enable the screen torch when an LED is absent.
+        // if (flashCameraId == null) prefs.edit { putBoolean(KEY_USE_SCREEN_TORCH, true) }
         trace("service_created", "STARTING", "camera_id" to flashCameraId,
             "has_proximity" to hasProximityHardware,
             "battery_exempt" to powerManager.isIgnoringBatteryOptimizations(packageName),
@@ -354,7 +351,7 @@ class ChopDetectionService : Service(), SensorEventListener {
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_ON)
             addAction(Intent.ACTION_SCREEN_OFF)
-            addAction(ScreenTorchActivity.ACTION_USER_DISMISSED_SCREEN_TORCH)
+            // DEPRECATED: addAction(ScreenTorchActivity.ACTION_USER_DISMISSED_SCREEN_TORCH)
         }
         ContextCompat.registerReceiver(this, systemReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
 
@@ -365,7 +362,7 @@ class ChopDetectionService : Service(), SensorEventListener {
     }
 
     private fun loadSensitivityPrefs(sharedPrefs: SharedPreferences) {
-        useScreenTorch = (flashCameraId == null) || sharedPrefs.getBoolean(KEY_USE_SCREEN_TORCH, false)
+        // DEPRECATED: useScreenTorch = sharedPrefs.getBoolean(KEY_USE_SCREEN_TORCH, false)
         detector.forceThreshold = sharedPrefs.getFloat(KEY_FORCE_THRESHOLD, TorchDefaults.FORCE_THRESHOLD)
         detector.chopWindowMs = sharedPrefs.getInt(KEY_CHOP_WINDOW_MS, TorchDefaults.CHOP_WINDOW_MS).toLong()
         detector.cooldownMs = sharedPrefs.getInt(KEY_COOLDOWN_MS, TorchDefaults.COOLDOWN_MS).toLong()
@@ -377,7 +374,7 @@ class ChopDetectionService : Service(), SensorEventListener {
             "off_force_ratio" to ChopDetector.OFF_FORCE_MULTIPLIER,
             "off_window_grace_ms" to ChopDetector.OFF_WINDOW_EXTENSION_MS,
             "cooldown_ms" to detector.cooldownMs, "auto_off_minutes" to autoOffMinutes,
-            "use_screen_torch" to useScreenTorch,
+            "screen_torch_enabled" to false,
             "armed_pref" to sharedPrefs.getBoolean(KEY_SERVICE_ENABLED, false))
     }
 
@@ -534,25 +531,26 @@ class ChopDetectionService : Service(), SensorEventListener {
     }
 
     private fun activatePreferredTorch() {
-        trace("activation_route", if (useScreenTorch || flashCameraId == null)
-            "SCREEN_SELECTED_OR_NO_FLASH" else "HARDWARE_LED_SELECTED")
-        if (useScreenTorch || flashCameraId == null) {
-            setScreenTorchState(true)
-        } else {
-            setHardwareLedState(true)
+        when (TorchRouting.select(flashCameraId != null)) {
+            TorchRouting.Route.UNAVAILABLE -> {
+                trace("activation_route", "NO_LED_AVAILABLE")
+                updateNotificationStatus("No hardware LED available")
+            }
+            TorchRouting.Route.HARDWARE_LED -> {
+                trace("activation_route", "HARDWARE_LED_SELECTED")
+                // DEPRECATED: if (useScreenTorch) setScreenTorchState(true)
+                setHardwareLedState(true)
+            }
         }
     }
 
     private fun deactivateActiveTorch() {
         trace("deactivation_route", when {
-            activeLightSource == ActiveLightSource.SCREEN_WHITE || ScreenTorchActivity.isScreenTorchVisible -> "CLOSE_SCREEN_TORCH"
             activeLightSource == ActiveLightSource.HARDWARE_LED -> "SWITCH_LED_OFF"
             else -> "NO_TRACKED_ACTIVE_LIGHT"
         })
         when {
-            activeLightSource == ActiveLightSource.SCREEN_WHITE || ScreenTorchActivity.isScreenTorchVisible -> {
-                setScreenTorchState(false)
-            }
+            // DEPRECATED: SCREEN_WHITE -> setScreenTorchState(false)
             activeLightSource == ActiveLightSource.HARDWARE_LED -> {
                 setHardwareLedState(false)
             }
@@ -565,7 +563,7 @@ class ChopDetectionService : Service(), SensorEventListener {
         val camId = flashCameraId
         if (camId == null) {
             trace("led_request_skipped", "NO_FLASH_CAMERA_ID", "request_id" to requestId)
-            if (targetState) setScreenTorchState(true)
+            // DEPRECATED: no screen-white fallback on LED absence.
             return
         }
         try {
@@ -609,9 +607,8 @@ class ChopDetectionService : Service(), SensorEventListener {
             activeLightSource = ActiveLightSource.NONE
             hardwareLedOwnedByUs = false
             if (targetState) {
-                // Camera LED is busy or unavailable; fall back to 100% White Screen Torch and track it as SCREEN_WHITE
-                updateNotificationStatus("LED busy — switched to 100% White Screen Torch")
-                setScreenTorchState(true)
+                // DEPRECATED: a busy LED no longer falls back to the white-screen torch.
+                updateNotificationStatus("LED unavailable (${e.reason})")
             } else {
                 updateNotificationStatus("LED unavailable (${e.reason})")
             }
@@ -626,6 +623,7 @@ class ChopDetectionService : Service(), SensorEventListener {
         }
     }
 
+    /* DEPRECATED: preserve white-screen torch implementation without a live call path.
     private fun setScreenTorchState(targetState: Boolean) {
         trace("screen_torch_request", if (targetState) "OPEN_REQUESTED_NOT_YET_VISIBLE" else "CLOSE_REQUESTED",
             "notifications_enabled" to getSystemService(NotificationManager::class.java).areNotificationsEnabled(),
@@ -689,6 +687,7 @@ class ChopDetectionService : Service(), SensorEventListener {
             }
         }
     }
+    */
 
     private fun scheduleAutoShutoff() {
         trace("auto_off_schedule", if (autoOffMinutes > 0) "TIMER_SCHEDULED" else "DISABLED_BY_SETTING",
@@ -782,6 +781,7 @@ class ChopDetectionService : Service(), SensorEventListener {
             description = "Keeps chop-flash gesture detection active"
             setShowBadge(false)
         }
+        /* DEPRECATED: don't create the white-screen high-priority notification channel.
         val screenTorchChannel = NotificationChannel(
             SCREEN_TORCH_ALERT_CHANNEL_ID,
             "Screen Torch Lock-Screen Wake",
@@ -791,8 +791,9 @@ class ChopDetectionService : Service(), SensorEventListener {
             setSound(null, null)
             enableVibration(false)
         }
+        */
         nm.createNotificationChannel(serviceChannel)
-        nm.createNotificationChannel(screenTorchChannel)
+        // DEPRECATED: nm.createNotificationChannel(screenTorchChannel)
     }
 
     private fun buildNotification(statusText: String): Notification {
@@ -848,15 +849,14 @@ class ChopDetectionService : Service(), SensorEventListener {
     }
 
     /**
-     * Centralized shutdown path: guarantees both the hardware LED torch and the 100% White
-     * Screen Torch are switched OFF, timers are cancelled, listeners are unregistered, and
+     * Centralized shutdown path: guarantees our hardware LED is switched OFF,
+     * timers are cancelled, listeners are unregistered, and
      * wake locks are released whenever the service stops via UI switch, QS tile, notification, or OS.
      */
     private fun shutdownTorchAndCleanup() {
         trace("service_cleanup", "STOP_OWNED_LIGHT_CANCEL_TIMERS_AND_SENSORS")
         mainHandler.removeCallbacks(autoShutoffRunnable)
         mainHandler.removeCallbacks(sleepSensorsRunnable)
-        mainHandler.removeCallbacks(screenTorchLaunchCheck)
         pendingOffHapticRunnable?.let(mainHandler::removeCallbacks)
         pendingOffHapticRunnable = null
 
@@ -872,10 +872,9 @@ class ChopDetectionService : Service(), SensorEventListener {
             }
         }
         hardwareLedOwnedByUs = false
-        if (activeLightSource == ActiveLightSource.SCREEN_WHITE || ScreenTorchActivity.isScreenTorchVisible) {
-            getSystemService(NotificationManager::class.java)?.cancel(SCREEN_TORCH_NOTIFICATION_ID)
-            sendBroadcast(Intent(ScreenTorchActivity.ACTION_CLOSE_SCREEN_TORCH).setPackage(packageName))
-        }
+        // Remove any alert left behind by a previous screen-torch-enabled installation.
+        getSystemService(NotificationManager::class.java)?.cancel(SCREEN_TORCH_NOTIFICATION_ID)
+        // DEPRECATED: sendBroadcast(Intent(ScreenTorchActivity.ACTION_CLOSE_SCREEN_TORCH).setPackage(packageName))
         activeLightSource = ActiveLightSource.NONE
         deactivateSensorsAndWakeLock()
     }
@@ -884,6 +883,12 @@ class ChopDetectionService : Service(), SensorEventListener {
         if (DeviceEligibility.isMotorolaDevice()) {
             prefs.edit { putBoolean(KEY_SERVICE_ENABLED, false) }
             trace("service_blocked", "MOTOROLA_DEVICE_EXCLUDED")
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        if (flashCameraId == null) {
+            prefs.edit { putBoolean(KEY_SERVICE_ENABLED, false) }
+            trace("service_blocked", "NO_HARDWARE_FLASH_LED")
             stopSelf()
             return START_NOT_STICKY
         }
