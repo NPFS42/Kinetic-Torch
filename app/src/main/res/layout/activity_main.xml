@@ -1,174 +1,312 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:id="@+id/rootScroll"
-    android:background="#121212"
-    android:clipToPadding="true"
-    android:fillViewport="true">
+    android:background="@drawable/bg_kinetic_gradient">
 
-    <LinearLayout
+    <!-- Original STARS torch mark, subdued so the controls remain readable. -->
+    <ImageView
+        android:layout_width="400dp"
+        android:layout_height="400dp"
+        android:layout_gravity="center"
+        android:alpha="0.10"
+        android:contentDescription="@null"
+        android:importantForAccessibility="no"
+        android:src="@drawable/ic_launcher_foreground" />
+
+    <ScrollView
+        android:id="@+id/rootScroll"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="20dp">
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="S.T.A.R.S. KINETIC TORCH"
-            android:textColor="#00E5FF"
-            android:textSize="20sp"
-            android:textStyle="bold"
-            android:paddingBottom="4dp" />
-
-        <TextView
-            android:id="@+id/txtHardwareStatus"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Hardware: Checking LED &amp; Proximity..."
-            android:textColor="#90A4AE"
-            android:textSize="12sp"
-            android:paddingBottom="4dp" />
-
-        <TextView
-            android:id="@+id/txtLivePeakReadout"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Live Calibration Peak: 0.0 m/s² [Chop phone to test]"
-            android:textColor="#80CBC4"
-            android:textSize="13sp"
-            android:paddingBottom="10dp" />
-
-        <com.google.android.material.materialswitch.MaterialSwitch
-            android:id="@+id/switchServiceEnable"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Enable Chop-Flash Background Service"
-            android:textColor="#FFFFFF"
-            android:textSize="16sp"
-            android:paddingVertical="6dp" />
-
-        <!-- DEPRECATED: White-screen fallback removed from the active settings UI.
-        <com.google.android.material.materialswitch.MaterialSwitch
-            android:id="@+id/switchScreenTorchFallback"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Use 100% White Screen Torch (Full Brightness)"
-            android:textColor="#E0E0E0"
-            android:textSize="14sp"
-            android:paddingVertical="6dp" />
-        -->
-
-        <TextView
-            android:id="@+id/txtForceValue"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="1. Chop Force Threshold: 12.0 m/s²"
-            android:textColor="#CCCCCC"
-            android:layout_marginTop="12dp" />
-
-        <SeekBar
-            android:id="@+id/seekForceThreshold"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp" />
-
-        <TextView
-            android:id="@+id/txtWindowValue"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="2. Double-Chop Window: 750 ms"
-            android:textColor="#CCCCCC"
-            android:layout_marginTop="12dp" />
-
-        <SeekBar
-            android:id="@+id/seekChopWindow"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp" />
-
-        <TextView
-            android:id="@+id/txtAutoOffValue"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="3. Safety Auto-Shutoff Timer: 10 min"
-            android:textColor="#CCCCCC"
-            android:layout_marginTop="12dp" />
-
-        <SeekBar
-            android:id="@+id/seekAutoOffMinutes"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp" />
-
-        <TextView
-            android:id="@+id/txtWakeModeValue"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="4. Standby Mode: Screen-Wake + 30s Window (Recommended)"
-            android:textColor="#CCCCCC"
-            android:layout_marginTop="12dp" />
-
-        <SeekBar
-            android:id="@+id/seekWakeMode"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:max="5"
-            android:layout_marginTop="4dp" />
-
-        <Button
-            android:id="@+id/btnResetSliders"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="@string/reset_sliders_button" />
-
-        <Button
-            android:id="@+id/btnAddQuickSettingsTile"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="18dp"
-            android:text="Add Quick Settings Tile" />
-
-        <Button
-            android:id="@+id/btnBatteryExemption"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Grant Unrestricted Battery (Samsung / OEM)" />
-
-
-        <Button
-            android:id="@+id/btnSourceAndLicense"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            android:text="@string/source_license_button" />
+        android:layout_height="match_parent"
+        android:clipToPadding="true"
+        android:fillViewport="true">
 
         <LinearLayout
-            android:id="@+id/debugPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:visibility="gone"
-            android:layout_marginTop="16dp">
+            android:padding="18dp">
+
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/debug_logging_help"
-                android:textColor="#FFE082" />
-            <Button
-                android:id="@+id/btnMarkDebugAttempt"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/debug_mark_attempt" />
-            <Button
-                android:id="@+id/btnExportDebugLog"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/debug_export_log" />
-        </LinearLayout>
-    </LinearLayout>
-</ScrollView>
+                android:letterSpacing="0.24"
+                android:text="S.T.A.R.S.  /  CONTROL"
+                android:textColor="#59E6EF"
+                android:textSize="12sp"
+                android:textStyle="bold" />
 
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:text="Kinetic Torch"
+                android:textColor="#F5FBFF"
+                android:textSize="30sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Dial it in. Lock it down. Light the way."
+                android:textColor="#A0B5C5"
+                android:textSize="13sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:background="@drawable/bg_kinetic_card"
+                android:orientation="vertical"
+                android:padding="18dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="TORCH CONTROL"
+                    android:textColor="#59E6EF"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.15" />
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/switchServiceEnable"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="Enable gesture control"
+                    android:textColor="#F5FBFF"
+                    android:textSize="16sp" />
+
+                <TextView
+                    android:id="@+id/txtHardwareStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="Checking LED and proximity sensor…"
+                    android:textColor="#AFC2D0"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/txtLivePeakReadout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="Live chop-plane peak: 0.0 m/s²"
+                    android:textColor="#92E0DC"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:background="@drawable/bg_kinetic_card"
+                android:orientation="vertical"
+                android:padding="18dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Gesture tuning"
+                    android:textColor="#F5FBFF"
+                    android:textSize="20sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/txtSettingsLockStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Unlocked · Changes save automatically"
+                    android:textColor="#AFC2D0"
+                    android:textSize="12sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSettingsLock"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="Lock settings"
+                    android:textAllCaps="false"
+                    app:backgroundTint="#174455"
+                    app:cornerRadius="14dp" />
+
+                <TextView
+                    android:id="@+id/txtForceValue"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="Chop force · 12.0 m/s²"
+                    android:textColor="#E1EEF4"
+                    android:textSize="14sp" />
+
+                <SeekBar
+                    android:id="@+id/seekForceThreshold"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
+
+                <TextView
+                    android:id="@+id/txtWindowValue"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="Double-chop window · 750 ms"
+                    android:textColor="#E1EEF4"
+                    android:textSize="14sp" />
+
+                <SeekBar
+                    android:id="@+id/seekChopWindow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
+
+                <TextView
+                    android:id="@+id/txtAutoOffValue"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="Safety auto-shutoff · 10 min"
+                    android:textColor="#E1EEF4"
+                    android:textSize="14sp" />
+
+                <SeekBar
+                    android:id="@+id/seekAutoOffMinutes"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
+
+                <TextView
+                    android:id="@+id/txtWakeModeValue"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="Standby mode · Screen-wake + 30s"
+                    android:textColor="#E1EEF4"
+                    android:textSize="14sp" />
+
+                <SeekBar
+                    android:id="@+id/seekWakeMode"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:max="5" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:letterSpacing="0.12"
+                    android:text="MY CALIBRATION"
+                    android:textColor="#59E6EF"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSaveProfile"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="Save custom profile"
+                    android:textAllCaps="false"
+                    app:backgroundTint="#08B6CE"
+                    app:cornerRadius="14dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnRestoreProfile"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Restore saved settings"
+                    android:textAllCaps="false"
+                    app:backgroundTint="#174455"
+                    app:cornerRadius="14dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnResetSliders"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="@string/reset_sliders_button"
+                    android:textAllCaps="false"
+                    app:backgroundTint="#283E4D"
+                    app:cornerRadius="14dp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:background="@drawable/bg_kinetic_card"
+                android:orientation="vertical"
+                android:padding="18dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Quick access"
+                    android:textColor="#F5FBFF"
+                    android:textSize="20sp"
+                    android:textStyle="bold" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnAddQuickSettingsTile"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="Add Quick Settings tile"
+                    android:textAllCaps="false"
+                    app:backgroundTint="#174455"
+                    app:cornerRadius="14dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnBatteryExemption"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Battery optimization settings"
+                    android:textAllCaps="false"
+                    app:backgroundTint="#174455"
+                    app:cornerRadius="14dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSourceAndLicense"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="@string/source_license_button"
+                    android:textAllCaps="false"
+                    app:backgroundTint="#283E4D"
+                    app:cornerRadius="14dp" />
+
+                <LinearLayout
+                    android:id="@+id/debugPanel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/debug_logging_help"
+                        android:textColor="#FFE082"
+                        android:textSize="12sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnMarkDebugAttempt"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/debug_mark_attempt"
+                        app:cornerRadius="14dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnExportDebugLog"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/debug_export_log"
+                        app:cornerRadius="14dp" />
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+</FrameLayout>

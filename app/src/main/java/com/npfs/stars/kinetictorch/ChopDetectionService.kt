@@ -45,7 +45,7 @@ class ChopDetectionService : Service(), SensorEventListener {
         const val PREFS_NAME = "KineticTorchPrefs"
         const val KEY_SERVICE_ENABLED = "service_enabled"
         const val KEY_USE_SCREEN_TORCH = "use_screen_torch"     // DEPRECATED: old preference ignored
-        const val KEY_FORCE_THRESHOLD = "force_threshold"       // Default from TorchDefaults (10.0..35.0)
+        const val KEY_FORCE_THRESHOLD = "force_threshold"       // Default from TorchDefaults (5.0..35.0)
         const val KEY_CHOP_WINDOW_MS = "chop_window_ms"         // Default from TorchDefaults (300..1000)
         const val KEY_AUTO_OFF_MINUTES = "auto_off_minutes"     // Default: 10 min (0 = Disabled, 1..30)
         const val KEY_WAKE_MODE = "wake_mode"                   // 0=ScreenOn, 1=15s, 2=30s(Def), 3=2m, 4=10m, 5=AlwaysOn 24/7

@@ -1,4 +1,4 @@
-name: Kinetic Torch 1.3.4 source validation
+name: Kinetic Torch 1.3.5 source validation
 on:
   push:
     branches: [main, feature/motorola-defaults-reset-20261103]
@@ -38,7 +38,7 @@ jobs:
       - name: Publish debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: kinetic-torch-1.3.4-debug-APK
+          name: kinetic-torch-1.3.5-debug-APK
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
@@ -55,7 +55,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: kinetic-torch-1.3.4-unit-test-results
+          name: kinetic-torch-1.3.5-unit-test-results
           path: |
             app/build/test-results/testDebugUnitTest/
             app/build/reports/tests/testDebugUnitTest/

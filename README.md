@@ -2,7 +2,7 @@
 
 Offline, ad-free Android flashlight utility with double-chop gesture control, hardware LED flash, and a Quick Settings tile.
 
-## Current source: 1.3.4 (versionCode 19; not yet published)
+## Current development source: 1.3.5 (versionCode 20; not yet published)
 
 Package: `com.npfs.stars.kinetictorch` · minSdk 26 · targetSdk 36 · compileSdk 36 · Java/Kotlin 17. The debug application installs separately under `com.npfs.stars.kinetictorch.debug`.
 
@@ -12,7 +12,7 @@ automatic fallback are disabled/commented out; the implementation is retained in
 Devices without a hardware flash LED cannot arm Kinetic Torch. An old saved white-screen
 preference does not restore it. See [deprecation notes](docs/SCREEN_TORCH_DEPRECATION.md).
 
-Version 1.3.4 inherits the 1.3.3 double-chop fixes and haptic confirmation previously tested on a Pixel 10 Pro XL (Android 17). The owner confirmed both LED ON/OFF and haptic feedback in RC6 of 1.3.3. Version 1.3.4 still requires acceptance testing on hardware.
+Version 1.3.5 builds on the signed 1.3.4 LED-only candidate and adds a calibration lock, saved/restoreable local profiles, a redesigned settings screen, and a 5.0 m/s² force-slider minimum. The 1.3.4 signed APK/AAB remain unchanged. The owner confirmed both LED ON/OFF and haptic feedback in RC6 of 1.3.3; these new settings features still require hardware testing.
 
 - Gesture defaults: **12 m/s²**, **750 ms**; Reset sliders restores those and the other slider defaults without changing arm state.
 - More forgiving OFF gesture: **75%** of configured force, **+250 ms** timing allowance; adjusted inter-chop quiet-valley detector with a 200 ms recoil guard.
