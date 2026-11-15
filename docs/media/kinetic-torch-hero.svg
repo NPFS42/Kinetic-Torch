@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="360" viewBox="0 0 1280 360" role="img" aria-labelledby="title desc">
+  <title id="title">S.T.A.R.S. Kinetic Torch</title>
+  <desc id="desc">Dark navy and electric-blue product banner with a stylized flashlight beam and kinetic motion lines.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#071427"/>
+      <stop offset=".55" stop-color="#102345"/>
+      <stop offset="1" stop-color="#060c19"/>
+    </linearGradient>
+    <linearGradient id="beam" x1="0" y1=".5" x2="1" y2=".5">
+      <stop offset="0" stop-color="#70eaff" stop-opacity=".72"/>
+      <stop offset=".55" stop-color="#3ca9ff" stop-opacity=".3"/>
+      <stop offset="1" stop-color="#359cff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#66e2ff"/>
+      <stop offset="1" stop-color="#648aff"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="360" rx="30" fill="url(#background)"/>
+  <path d="M0 282H1280M0 74H1280M82 0V360M1198 0V360" fill="none" stroke="#6090c1" stroke-opacity=".12"/>
+  <circle cx="1080" cy="176" r="164" fill="none" stroke="#58c7ff" stroke-opacity=".16" stroke-width="2"/>
+  <circle cx="1080" cy="176" r="119" fill="none" stroke="#58c7ff" stroke-opacity=".14" stroke-width="2"/>
+  <circle cx="1080" cy="176" r="74" fill="none" stroke="#58c7ff" stroke-opacity=".11" stroke-width="2"/>
+  <path d="M940 147 L1185 77 L1185 275 L940 204 Z" fill="url(#beam)"/>
+  <path d="M918 148H947V203H918Z" rx="6" fill="#bcefff"/>
+  <path d="M868 160H921V191H868Z" fill="#1f85ce" stroke="#7bdeff" stroke-width="4"/>
+  <path d="M854 169H868M849 181H868" fill="none" stroke="#7bdeff" stroke-width="5" stroke-linecap="round"/>
+  <path d="M796 143L843 143M771 176H825M798 209H844" fill="none" stroke="#71caff" stroke-opacity=".57" stroke-width="5" stroke-linecap="round"/>
+  <path d="M1069 74L1076 89L1092 92L1080 104L1083 120L1069 112L1054 120L1058 104L1046 92L1062 89Z" fill="#9aeaff" fill-opacity=".78"/>
+  <text x="96" y="90" fill="#7ddcff" font-size="31" font-family="Arial, Helvetica, sans-serif" font-weight="700" letter-spacing="11">S.T.A.R.S.</text>
+  <rect x="95" y="112" width="99" height="5" rx="2" fill="url(#accent)"/>
+  <text x="94" y="205" fill="#ffffff" font-size="76" font-family="Arial, Helvetica, sans-serif" font-weight="800" letter-spacing="1">KINETIC TORCH</text>
+  <text x="99" y="253" fill="#b8cce8" font-size="23" font-family="Arial, Helvetica, sans-serif" letter-spacing="3.4">DOUBLE-CHOP CONTROL  ·  INSTANT LIGHT</text>
+  <text x="99" y="308" fill="#77d8ff" font-size="19" font-family="Arial, Helvetica, sans-serif" letter-spacing="2">OFFLINE  /  AD-FREE  /  OPEN SOURCE</text>
+</svg>
