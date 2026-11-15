@@ -1,10 +1,10 @@
-# 1.3.5 — settings protection and interface refresh (unreleased)
+# 1.3.5 — settings protection and interface refresh (Play internal testing)
 
 - Adds a persistent calibration lock with a two-second touch-and-hold unlock; torch arming and Quick Settings remain usable while locked.
 - Automatically captures a last-locked recovery snapshot; adds one named local custom profile and a confirmation-based restore flow.
 - Restores the 5.0 m/s² lower-force slider setting used successfully by a Samsung tester while retaining existing defaults and detector logic.
 - Redesigns the settings interface with dark translucent cards, a subdued STARS torch-mark background, clearer status, and grouped calibration/actions.
-- Based on the signed but not yet published 1.3.4/code 19 LED-only candidate (`3d7348f`). This is source work only; Android build and hardware acceptance are pending.
+- Based on the signed 1.3.4/code 19 LED-only candidate (`3d7348f`). The owner reported uploading 1.3.5 for Play internal testing; broader device acceptance is still pending, and an F-Droid release has not been submitted.
 
 ---
 

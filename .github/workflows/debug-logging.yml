@@ -41,6 +41,7 @@ jobs:
       - name: Verify Play debug signature and record checksums
         run: |
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs app/build/outputs/apk/play/debug/app-play-debug.apk
+          bash tools/verify-distribution-apks.sh "$ANDROID_HOME/build-tools/36.0.0/aapt"
           sha256sum app/build/outputs/apk/play/debug/app-play-debug.apk
           sha256sum app/build/outputs/bundle/playDiagnostic/app-play-diagnostic.aab
           sha256sum app/build/outputs/apk/fdroid/release/app-fdroid-release-unsigned.apk

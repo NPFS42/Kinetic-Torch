@@ -34,10 +34,6 @@ Configure the original app signing or Play upload keystore through private envir
 
 On November 2, 2026, recovered working source was imported as version 1.3.0/code 4. An alternate tree is retained in `historical/downloaded-v1_3_1/`; its archive name is not proof of the APK's actual version. The earlier assessment at `docs/LOCAL_RECOVERY_2026-11-02.md` and `docs/UPLOAD_ANALYSIS_2026-11-02.md` is historical and predates the 1.3.3 device testing.
 
-## License
-
-GNU AGPL version 3 only (`AGPL-3.0-only`); see [LICENSE](LICENSE) and [LICENSE-SCOPE.md](LICENSE-SCOPE.md). Previously distributed GPLv3 versions retain their earlier grants; dependencies retain their licenses; STARS/NPFS marks are excluded.
-
 ## License (updated 2026-11-08)
 
 Original project-owned software source uses **GNU AGPL version 3 only** (`AGPL-3.0-only`). See [LICENSE](LICENSE) and [license scope and third-party exclusions](LICENSE-SCOPE.md). Prior grants remain valid for historical releases; separate media, names, trademarks, personal/business records and third-party components are not relicensed. This metadata change does not deploy or release software.
