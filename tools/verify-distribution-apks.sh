@@ -27,11 +27,17 @@ verify_apk() {
     printf '%s\n' "${badging%%$'\n'*}" >&2
     return 1
   fi
-  if [[ "$permissions" == *"android.permission.INTERNET"* || "$permissions" == *"android.permission.ACCESS_NETWORK_STATE"* ]]; then
-    printf 'Unexpected network permission in %s\n' "$apk" >&2
+  if [[ "$permissions" == *"android.permission.INTERNET"* ||
+        "$permissions" == *"android.permission.ACCESS_NETWORK_STATE"* ||
+        "$permissions" == *"android.permission.USE_FULL_SCREEN_INTENT"* ]]; then
+    printf 'Unexpected network or deprecated full-screen permission in %s\n' "$apk" >&2
     return 1
   fi
-  printf 'Validated %s: %s, version 1.3.5/code 20, offline manifest\n' "$apk" "$expected_id"
+  if ! unzip -p "$apk" assets/COPYING | cmp -s app/src/main/assets/COPYING -; then
+    printf 'AGPLv3 license asset missing or mismatched in %s\n' "$apk" >&2
+    return 1
+  fi
+  printf 'Validated %s: %s, version 1.3.5/code 20, offline manifest and AGPL asset\n' "$apk" "$expected_id"
 }
 
 verify_apk "$play_debug" 'com.npfs.stars.kinetictorch.debug' '1.3.5-debug'
