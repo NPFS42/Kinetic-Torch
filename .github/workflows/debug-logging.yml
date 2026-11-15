@@ -34,15 +34,18 @@ jobs:
           :app:testPlayDebugUnitTest
           :app:testFdroidDebugUnitTest
           :app:assemblePlayDebug
+          :app:assembleFdroidDebug
           :app:bundlePlayRelease
           :app:bundlePlayDiagnostic
           :app:assemblePlayDiagnostic
           :app:assembleFdroidRelease
-      - name: Verify Play debug signature and record checksums
+      - name: Verify both debug signatures and distribution package identities
         run: |
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs app/build/outputs/apk/play/debug/app-play-debug.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs app/build/outputs/apk/fdroid/debug/app-fdroid-debug.apk
           bash tools/verify-distribution-apks.sh "$ANDROID_HOME/build-tools/36.0.0/aapt"
           sha256sum app/build/outputs/apk/play/debug/app-play-debug.apk
+          sha256sum app/build/outputs/apk/fdroid/debug/app-fdroid-debug.apk
           sha256sum app/build/outputs/bundle/playDiagnostic/app-play-diagnostic.aab
           sha256sum app/build/outputs/apk/fdroid/release/app-fdroid-release-unsigned.apk
       - name: Upload Play debug APK
@@ -50,6 +53,13 @@ jobs:
         with:
           name: kinetic-torch-play-debug-APK
           path: app/build/outputs/apk/play/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload separately installable F-Droid debug test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: kinetic-torch-fdroid-debug-APK-FOR-DEVICE-TESTING
+          path: app/build/outputs/apk/fdroid/debug/*.apk
           if-no-files-found: error
           retention-days: 14
       - name: Upload unsigned Play artifacts (not for distribution)

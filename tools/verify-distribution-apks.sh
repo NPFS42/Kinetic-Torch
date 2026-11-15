@@ -10,6 +10,7 @@ fi
 
 aapt="$1"
 play_debug='app/build/outputs/apk/play/debug/app-play-debug.apk'
+fdroid_debug='app/build/outputs/apk/fdroid/debug/app-fdroid-debug.apk'
 fdroid_release='app/build/outputs/apk/fdroid/release/app-fdroid-release-unsigned.apk'
 
 verify_apk() {
@@ -41,4 +42,5 @@ verify_apk() {
 }
 
 verify_apk "$play_debug" 'com.npfs.stars.kinetictorch.debug' '1.3.5-debug'
+verify_apk "$fdroid_debug" 'com.npfs.stars.kinetictorch.fdroid.debug' '1.3.5-debug'
 verify_apk "$fdroid_release" 'com.npfs.stars.kinetictorch.fdroid' '1.3.5'
