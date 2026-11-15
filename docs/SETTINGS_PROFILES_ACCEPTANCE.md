@@ -17,6 +17,6 @@ Source baseline: signed 1.3.4 (`3d7348f`). This change is not yet built, signed,
 
 ## Distribution gate
 
-- Run `./gradlew :app:testDebugUnitTest :app:assembleDebug` on a machine with Android SDK and Gradle 8.13.
+- Run `./gradlew :app:testPlayDebugUnitTest :app:testFdroidDebugUnitTest :app:assemblePlayDebug :app:assembleFdroidDebug` on a machine with Android SDK and Gradle 8.13.
 - Verify an install-over-update from the existing signed beta; release builds must use the same NPFS signing identity.
 - New 1.3.5/code 20 APK/AAB must be built and signed independently; never relabel the previously signed 1.3.4/code 19 artifacts.

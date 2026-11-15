@@ -21,10 +21,10 @@ try {
     $env:KINETIC_KEY_ALIAS = $KeyAlias
     $env:KINETIC_KEYSTORE_PASSWORD = LocalPlainText $storePassword
     $env:KINETIC_KEY_PASSWORD = LocalPlainText $keyPassword
-    & $GradleCommand --no-daemon :app:testDebugUnitTest :app:bundleDiagnostic :app:assembleDiagnostic
+    & $GradleCommand --no-daemon :app:testPlayDebugUnitTest :app:bundlePlayDiagnostic :app:assemblePlayDiagnostic
     if ($LASTEXITCODE -ne 0) { throw "Gradle failed with exit code $LASTEXITCODE" }
-    Write-Host "Signed AAB: app/build/outputs/bundle/diagnostic/app-diagnostic.aab"
-    Write-Host "Signed APK: app/build/outputs/apk/diagnostic/app-diagnostic.apk"
+    Write-Host "Signed AAB: app/build/outputs/bundle/playDiagnostic/app-play-diagnostic.aab"
+    Write-Host "Signed APK: app/build/outputs/apk/play/diagnostic/app-play-diagnostic.apk"
     Write-Host "Verify signatures and match the Play upload certificate before uploading."
 } finally {
     foreach ($name in $names) { [Environment]::SetEnvironmentVariable($name, $previous[$name], "Process") }

@@ -1,0 +1,21 @@
+S.T.A.R.S. Kinetic Torch lets you toggle your phone's rear LED flashlight with a quick double-chop gesture.
+
+Adjust gesture sensitivity and timing to suit your movements. The app uses the hardware camera flash LED; a device with a flash and accelerometer is required.
+
+Features:
+• Double-chop LED flashlight control
+• Adjustable gesture sensitivity and timing
+• Quick Settings tile
+• Automatic shutoff timer
+• Proximity guard to help prevent activation while covered
+• Vibration confirmation for successful toggles
+
+When armed, Kinetic Torch listens for motion through a foreground service with a persistent notification and a clear disarm control. Continuous listening can increase battery use.
+
+Works offline. No account or ads.
+
+Open-source code (AGPLv3):
+https://github.com/NPFS42/Kinetic-Torch
+
+Privacy policy:
+https://sovereignresearch.net/kinetic-torch-privacy.html

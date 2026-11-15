@@ -1,0 +1,1 @@
+Version 1.3.5 introduces a redesigned settings screen, a calibration lock with hold-to-unlock protection, a named custom gesture profile, and restore options. Gesture control remains accessible while tuning is locked. This LED-only release does not include the former white-screen torch option.
