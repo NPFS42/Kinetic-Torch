@@ -6,11 +6,18 @@
 
 For the developer-owned Kinetic Torch Android application, including original Kotlin/Java source, build scripts and original application code.
 
+The original copyright-controlled visual expression in the specific
+Kinetic Torch resources listed in [ARTWORK-AND-TRADEMARKS.md](ARTWORK-AND-TRADEMARKS.md)
+is also made available under `AGPL-3.0-only`, subject to that document's
+ownership and third-party boundaries. This permits source and binary
+redistribution (including F-Droid) and derivative works. Trademark rights
+remain reserved as distinct from copyright permissions.
+
 Any previous licenses already granted to recipients remain valid for those previously licensed versions. Contributors may relicense their own work only with authority from relevant copyright holders.
 
 ## Not relicensed by this change
 
-Third-party dependencies, upstream code, vendor SDKs, fonts, unowned images, audio, trademarks, logos, customer or personal data, authentication secrets and other separately licensed assets **retain their original rights and notices**. Original design, textual/editorial content and branding require an explicit separate grant if they are to be redistributed outside the software source scope.
+Third-party dependencies, upstream code, vendor SDKs, fonts, unowned images, audio, trademarks, logos, customer or personal data, authentication secrets and other separately licensed assets **retain their original rights and notices**. Except for the expressly enumerated Kinetic Torch artwork above, original design, textual/editorial content and branding require a separate lawful grant to be redistributed outside the software source scope. Permission to reproduce the official marks with faithful Kinetic Torch distributions is described in the artwork/trademark notice; it does not give independent rights to the marks.
 
 The already-distributed GPLv3 versions remain under their original grants. The source-to-APK relationship, signing keys and Play Store metadata must be reviewed before a new signed release.
 
