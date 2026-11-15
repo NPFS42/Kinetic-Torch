@@ -2,6 +2,23 @@
 
 Offline, ad-free Android flashlight utility with double-chop gesture control, hardware LED flash, and a Quick Settings tile.
 
+## App preview
+
+Explore the latest v1.3.5 interface. Select any screenshot to open it full size.
+
+<p align="center">
+  <a href="fastlane/metadata/android/en-US/images/phoneScreenshots/1.png"><img src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.png" alt="S.T.A.R.S. Kinetic Torch v1.3.5 app preview 1 of 6" width="30%"></a>
+  <a href="fastlane/metadata/android/en-US/images/phoneScreenshots/2.png"><img src="fastlane/metadata/android/en-US/images/phoneScreenshots/2.png" alt="S.T.A.R.S. Kinetic Torch v1.3.5 app preview 2 of 6" width="30%"></a>
+  <a href="fastlane/metadata/android/en-US/images/phoneScreenshots/3.png"><img src="fastlane/metadata/android/en-US/images/phoneScreenshots/3.png" alt="S.T.A.R.S. Kinetic Torch v1.3.5 app preview 3 of 6" width="30%"></a>
+</p>
+<p align="center">
+  <a href="fastlane/metadata/android/en-US/images/phoneScreenshots/4.png"><img src="fastlane/metadata/android/en-US/images/phoneScreenshots/4.png" alt="S.T.A.R.S. Kinetic Torch v1.3.5 app preview 4 of 6" width="30%"></a>
+  <a href="fastlane/metadata/android/en-US/images/phoneScreenshots/5.png"><img src="fastlane/metadata/android/en-US/images/phoneScreenshots/5.png" alt="S.T.A.R.S. Kinetic Torch v1.3.5 app preview 5 of 6" width="30%"></a>
+  <a href="fastlane/metadata/android/en-US/images/phoneScreenshots/6.png"><img src="fastlane/metadata/android/en-US/images/phoneScreenshots/6.png" alt="S.T.A.R.S. Kinetic Torch v1.3.5 app preview 6 of 6" width="30%"></a>
+</p>
+
+*These are the six approved release screenshots; the retired white-screen torch option is not shown.*
+
 ## Current development source: 1.3.5 (versionCode 20; internal testing)
 
 Two distribution flavors share this source: Google Play uses the existing package `com.npfs.stars.kinetictorch`, while F-Droid uses `com.npfs.stars.kinetictorch.fdroid`. Both use minSdk 26, targetSdk 36, compileSdk 36, and Java/Kotlin 17. Debug variants append `.debug` to their respective package IDs. See [distribution streams](docs/DISTRIBUTION_STREAMS.md).
@@ -26,7 +43,7 @@ See [CHANGELOG.md](CHANGELOG.md) and [docs/MOTOROLA_EXCLUSION_AND_DEFAULTS.md](d
 
 ## Build and distribution
 
-The GitHub Actions workflow tests both flavors and builds unsigned release candidates for each distribution, plus Play debug/diagnostic variants. Debug and unsigned CI artifacts are **not** store updates. Version 1.3.5/code 20 has been released to Play internal testing; F-Droid submission is separate and has not yet occurred.
+The GitHub Actions workflow tests both flavors and builds unsigned release candidates for each distribution, plus Play debug/diagnostic variants. Debug and unsigned CI artifacts are **not** store updates. Version 1.3.5/code 20 has been released to Play internal testing; the separate F-Droid submission is now [open for review as merge request !57530](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/57530).
 
 Configure the original app signing or Play upload keystore through private environment variables `KINETIC_KEYSTORE_PATH`, `KINETIC_KEYSTORE_PASSWORD`, `KINETIC_KEY_ALIAS`, and `KINETIC_KEY_PASSWORD` on the trusted release machine; never commit keys or passwords. Build the Play AAB with `:app:bundlePlayRelease`. F-Droid builds `:app:assembleFdroidRelease` from a tagged source revision and signs independently. Moving source to `main` does not deploy either store update.
 
