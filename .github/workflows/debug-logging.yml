@@ -1,4 +1,4 @@
-name: Kinetic Torch 1.3.5 source validation
+name: Kinetic Torch dual-distribution validation
 on:
   push:
     branches: [main, feature/motorola-defaults-reset-20261103]
@@ -8,7 +8,7 @@ on:
 permissions:
   contents: read
 jobs:
-  debug-apk:
+  distribution-builds:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -28,36 +28,56 @@ jobs:
         run: |
           rm -f gradle/gradle-daemon-jvm.properties
           sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
-      - name: Test and assemble diagnostic APK
-        run: gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:bundleDiagnostic :app:assembleDiagnostic
-      - name: Verify debug APK signature and record checksums
+      - name: Test both flavors and assemble distribution artifacts
+        run: >-
+          gradle --no-daemon
+          :app:testPlayDebugUnitTest
+          :app:testFdroidDebugUnitTest
+          :app:assemblePlayDebug
+          :app:bundlePlayRelease
+          :app:bundlePlayDiagnostic
+          :app:assemblePlayDiagnostic
+          :app:assembleFdroidRelease
+      - name: Verify Play debug signature and record checksums
         run: |
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs app/build/outputs/apk/debug/app-debug.apk
-          sha256sum app/build/outputs/apk/debug/app-debug.apk
-          sha256sum app/build/outputs/bundle/diagnostic/app-diagnostic.aab
-      - name: Publish debug APK
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs app/build/outputs/apk/play/debug/app-play-debug.apk
+          bash tools/verify-distribution-apks.sh "$ANDROID_HOME/build-tools/36.0.0/aapt"
+          sha256sum app/build/outputs/apk/play/debug/app-play-debug.apk
+          sha256sum app/build/outputs/bundle/playDiagnostic/app-play-diagnostic.aab
+          sha256sum app/build/outputs/apk/fdroid/release/app-fdroid-release-unsigned.apk
+      - name: Upload Play debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: kinetic-torch-1.3.5-debug-APK
-          path: app/build/outputs/apk/debug/*.apk
+          name: kinetic-torch-play-debug-APK
+          path: app/build/outputs/apk/play/debug/*.apk
           if-no-files-found: error
           retention-days: 14
-      - name: Publish unsigned Play diagnostic artifacts
+      - name: Upload unsigned Play artifacts (not for distribution)
         uses: actions/upload-artifact@v4
         with:
-          name: kinetic-torch-play-diagnostic-UNSIGNED
+          name: kinetic-torch-play-UNSIGNED-DO-NOT-PUBLISH
           path: |
-            app/build/outputs/apk/diagnostic/*.apk
-            app/build/outputs/bundle/diagnostic/*.aab
+            app/build/outputs/apk/play/diagnostic/*.apk
+            app/build/outputs/bundle/playDiagnostic/*.aab
+            app/build/outputs/bundle/playRelease/*.aab
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload unsigned F-Droid candidate (not for distribution)
+        uses: actions/upload-artifact@v4
+        with:
+          name: kinetic-torch-fdroid-UNSIGNED-DO-NOT-PUBLISH
+          path: app/build/outputs/apk/fdroid/release/*.apk
           if-no-files-found: error
           retention-days: 14
       - name: Publish unit test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: kinetic-torch-1.3.5-unit-test-results
+          name: kinetic-torch-dual-flavor-unit-test-results
           path: |
-            app/build/test-results/testDebugUnitTest/
-            app/build/reports/tests/testDebugUnitTest/
+            app/build/test-results/testPlayDebugUnitTest/
+            app/build/reports/tests/testPlayDebugUnitTest/
+            app/build/test-results/testFdroidDebugUnitTest/
+            app/build/reports/tests/testFdroidDebugUnitTest/
           if-no-files-found: ignore
           retention-days: 14

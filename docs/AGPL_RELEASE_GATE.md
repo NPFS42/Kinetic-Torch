@@ -8,6 +8,7 @@ Project-owned application source is GNU AGPL version 3 only (`AGPL-3.0-only`), e
 - [ ] Verify the exact commit, versionName, versionCode, package ID, and signing certificate expected for the public build.
 - [ ] Run instrumented/unit tests and validate torch ON/OFF, proximity protection, slider-reset behavior and OEM restrictions.
 - [ ] Review Gradle dependency coordinates and include applicable upstream copyright/license notices.
+- [ ] Verify the ownership, scope and notices for the [enumerated original artwork and official marks](../ARTWORK-AND-TRADEMARKS.md); do not purport to relicense third-party screenshot/UI content.
 - [ ] Check that the built APK contains `assets/COPYING` (full GNU AGPLv3 text).
 - [ ] Confirm the app's Settings button opens [the publicly accessible source repository](https://github.com/NPFS42/Kinetic-Torch). No runtime network permission is required for this external browser action.
 - [ ] Tag the precise source commit for the signed release, archive its build scripts and relevant dependencies, and ensure users can obtain corresponding source for that APK version at no charge.

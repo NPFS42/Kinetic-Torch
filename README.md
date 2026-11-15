@@ -2,9 +2,9 @@
 
 Offline, ad-free Android flashlight utility with double-chop gesture control, hardware LED flash, and a Quick Settings tile.
 
-## Current development source: 1.3.5 (versionCode 20; not yet published)
+## Current development source: 1.3.5 (versionCode 20; internal testing)
 
-Package: `com.npfs.stars.kinetictorch` · minSdk 26 · targetSdk 36 · compileSdk 36 · Java/Kotlin 17. The debug application installs separately under `com.npfs.stars.kinetictorch.debug`.
+Two distribution flavors share this source: Google Play uses the existing package `com.npfs.stars.kinetictorch`, while F-Droid uses `com.npfs.stars.kinetictorch.fdroid`. Both use minSdk 26, targetSdk 36, compileSdk 36, and Java/Kotlin 17. Debug variants append `.debug` to their respective package IDs. See [distribution streams](docs/DISTRIBUTION_STREAMS.md).
 
 **LED-only release candidate:** The white-screen torch is deprecated and no longer reachable.
 Its settings switch, full-screen-intent permission, manifest activity, service routing, and
@@ -26,21 +26,17 @@ See [CHANGELOG.md](CHANGELOG.md) and [docs/MOTOROLA_EXCLUSION_AND_DEFAULTS.md](d
 
 ## Build and distribution
 
-The GitHub Actions workflow verifies unit tests, builds a debug APK and a release-like diagnostic variant, and checks the debug APK signature. Debug APKs are **not** the Play Store update. The Play Console currently has a 1.3.3/code 18 draft; a fresh signed 1.3.4/code 19 bundle must be uploaded before this deprecation reaches testers or production.
+The GitHub Actions workflow tests both flavors and builds unsigned release candidates for each distribution, plus Play debug/diagnostic variants. Debug and unsigned CI artifacts are **not** store updates. Version 1.3.5/code 20 has been released to Play internal testing; F-Droid submission is separate and has not yet occurred.
 
-Configure the original app signing or Play upload keystore through private environment variables `KINETIC_KEYSTORE_PATH`, `KINETIC_KEYSTORE_PASSWORD`, `KINETIC_KEY_ALIAS`, and `KINETIC_KEY_PASSWORD` on the trusted release machine; never commit keys or passwords. Confirm upgrade signature compatibility with the published beta before distributing a release APK. Moving source to `main` does not deploy a Play update.
+Configure the original app signing or Play upload keystore through private environment variables `KINETIC_KEYSTORE_PATH`, `KINETIC_KEYSTORE_PASSWORD`, `KINETIC_KEY_ALIAS`, and `KINETIC_KEY_PASSWORD` on the trusted release machine; never commit keys or passwords. Build the Play AAB with `:app:bundlePlayRelease`. F-Droid builds `:app:assembleFdroidRelease` from a tagged source revision and signs independently. Moving source to `main` does not deploy either store update.
 
 ## Historical source recovery
 
 On November 2, 2026, recovered working source was imported as version 1.3.0/code 4. An alternate tree is retained in `historical/downloaded-v1_3_1/`; its archive name is not proof of the APK's actual version. The earlier assessment at `docs/LOCAL_RECOVERY_2026-11-02.md` and `docs/UPLOAD_ANALYSIS_2026-11-02.md` is historical and predates the 1.3.3 device testing.
 
-## License
+## Software, artwork and trademark permissions
 
-GNU AGPL version 3 only (`AGPL-3.0-only`); see [LICENSE](LICENSE) and [LICENSE-SCOPE.md](LICENSE-SCOPE.md). Previously distributed GPLv3 versions retain their earlier grants; dependencies retain their licenses; STARS/NPFS marks are excluded.
-
-## License (updated 2026-11-08)
-
-Original project-owned software source uses **GNU AGPL version 3 only** (`AGPL-3.0-only`). See [LICENSE](LICENSE) and [license scope and third-party exclusions](LICENSE-SCOPE.md). Prior grants remain valid for historical releases; separate media, names, trademarks, personal/business records and third-party components are not relicensed. This metadata change does not deploy or release software.
+Original project-owned software source uses **GNU AGPL version 3 only** (`AGPL-3.0-only`). See [LICENSE](LICENSE), [license scope and third-party exclusions](LICENSE-SCOPE.md), and the [specific grant for original visual artwork and official-brand redistribution](ARTWORK-AND-TRADEMARKS.md). Prior grants remain valid for historical releases; names and trademarks remain reserved as identifiers of origin, and third-party/private material is not relicensed. Licensing a source file does not deploy or release software.
 
 ## AGPL Android source access and release gate
 

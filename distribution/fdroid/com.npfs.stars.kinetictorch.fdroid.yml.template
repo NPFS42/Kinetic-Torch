@@ -1,0 +1,34 @@
+# STAGING TEMPLATE, NOT AN F-DROID SUBMISSION.
+# After dual-flavor CI, device acceptance and an exact release tag are complete,
+# replace RELEASE_COMMIT_SHA with the full reviewed commit SHA, remove this
+# header, and submit the resulting .yml to fdroiddata/metadata/ on GitLab.
+Categories:
+  - System
+License: AGPL-3.0-only
+AuthorName: NPFS LLC / S.T.A.R.S.
+WebSite: https://github.com/NPFS42/Kinetic-Torch
+SourceCode: https://github.com/NPFS42/Kinetic-Torch
+IssueTracker: https://github.com/NPFS42/Kinetic-Torch/issues
+Changelog: https://github.com/NPFS42/Kinetic-Torch/blob/main/CHANGELOG.md
+
+RepoType: git
+Repo: https://github.com/NPFS42/Kinetic-Torch.git
+
+Builds:
+  - versionName: 1.3.5
+    versionCode: 20
+    commit: RELEASE_COMMIT_SHA
+    subdir: app
+    # CI removes this machine-specific JetBrains JDK 21 download pin too.
+    # Use the JDK supplied by the F-Droid build environment instead.
+    prebuild: rm ../gradle/gradle-daemon-jvm.properties
+    gradle:
+      - fdroid
+
+# Enable only after release-tag parsing is verified in fdroidserver. Because
+# the FDroid applicationId is created by applicationIdSuffix, use
+# UpdateCheckName: Ignore if enabling automated tag checks.
+AutoUpdateMode: None
+UpdateCheckMode: None
+CurrentVersion: 1.3.5
+CurrentVersionCode: 20

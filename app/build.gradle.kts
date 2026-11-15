@@ -16,6 +16,19 @@ android {
         buildConfigField("boolean", "DIAGNOSTICS_ENABLED", "false")
     }
 
+    // Two independently installable distributions from the same source and version.
+    // The Play flavor deliberately keeps the existing application ID unchanged.
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("play") {
+            dimension = "distribution"
+        }
+        create("fdroid") {
+            dimension = "distribution"
+            applicationIdSuffix = ".fdroid"
+        }
+    }
+
     // Use the existing shop upload/release key without committing any signing material.
     val keyPath = System.getenv("KINETIC_KEYSTORE_PATH")
     if (!keyPath.isNullOrBlank()) {
