@@ -1,10 +1,32 @@
-# S.T.A.R.S. Kinetic Torch
+<p align="center">
+  <img src="docs/media/kinetic-torch-hero.svg" alt="S.T.A.R.S. Kinetic Torch — double-chop flashlight control" width="100%">
+</p>
 
-Offline, ad-free Android flashlight utility with double-chop gesture control, hardware LED flash, and a Quick Settings tile.
+<h1 align="center">S.T.A.R.S. Kinetic Torch</h1>
 
-## App preview
+<p align="center">
+  <strong>Two chops. Light on. Two chops. Light off.</strong><br>
+  A customizable Android flashlight gesture utility. No ads, accounts, or internet connection required.
+</p>
 
-Explore the latest v1.3.5 interface. Select any screenshot to open it full size.
+<p align="center">
+  <a href="https://github.com/NPFS42/Kinetic-Torch/actions/workflows/debug-logging.yml"><img src="https://github.com/NPFS42/Kinetic-Torch/actions/workflows/debug-logging.yml/badge.svg?branch=main" alt="Android build and test status"></a>
+  &nbsp; <strong>Android 8.0+</strong> &nbsp;·&nbsp; <strong>AGPL-3.0-only</strong> &nbsp;·&nbsp; <strong>v1.3.5 beta</strong>
+</p>
+
+<p align="center">
+  <a href="#preview">Screenshots</a> ·
+  <a href="#features">Features</a> ·
+  <a href="#get-and-test">Get &amp; test</a> ·
+  <a href="#compatibility">Compatibility</a> ·
+  <a href="#for-developers">Developers</a>
+</p>
+
+> **Release status:** Version **1.3.5 (code 20)** is in Google Play **internal testing** (per the project owner). The [F-Droid submission is under review](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/57530). Neither listing should be mistaken for a generally available public release.
+
+## Preview
+
+The six approved v1.3.5 screenshots show the redesigned app. Tap any image to see it full size.
 
 <p align="center">
   <a href="fastlane/metadata/android/en-US/images/phoneScreenshots/1.png"><img src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.png" alt="S.T.A.R.S. Kinetic Torch v1.3.5 app preview 1 of 6" width="30%"></a>
@@ -17,7 +39,56 @@ Explore the latest v1.3.5 interface. Select any screenshot to open it full size.
   <a href="fastlane/metadata/android/en-US/images/phoneScreenshots/6.png"><img src="fastlane/metadata/android/en-US/images/phoneScreenshots/6.png" alt="S.T.A.R.S. Kinetic Torch v1.3.5 app preview 6 of 6" width="30%"></a>
 </p>
 
-*These are the six approved release screenshots; the retired white-screen torch option is not shown.*
+## Features
+
+| Light when you need it | Control on your terms |
+| --- | --- |
+| **Double-chop toggle** — switch the rear LED flashlight on or off with a deliberate motion. | **Fine-tune your gesture** — adjust force and timing, including fast movements. |
+| **Protect against accidental activation** — proximity guard and automatic shutoff timer. | **Save your setup** — named profiles, reset-to-defaults, and a lock to prevent unwanted settings changes. |
+| **Stay in control** — Quick Settings tile, foreground listening notification, and haptic feedback. | **Stay private** — no advertising, account, telemetry, or internet permission. |
+
+### How it works
+
+1. Open Kinetic Torch on a compatible Android phone and enable gesture listening.
+2. Make two quick chopping motions to toggle the phone's **rear LED flashlight**.
+3. Adjust the timing and sensitivity to suit your movement. Save and lock a profile when it feels right.
+
+The white-screen torch mode was retired; this release uses the **hardware flash LED only**.
+
+## Get and test
+
+| Channel | Current state | Where to go |
+| --- | --- | --- |
+| **Google Play** | 1.3.5 internal test; access requires an approved invitation. | **Already a tester?** Use your existing Google Play testing invitation. |
+| **F-Droid** | Source submitted; awaiting F-Droid review, build, and signing. | [Follow submission !57530](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/57530) |
+| **Source code** | Public development repository; AGPLv3. | [Browse source](https://github.com/NPFS42/Kinetic-Torch) · [Change history](CHANGELOG.md) |
+
+**Want to help test?** [Open a beta-tester request](https://github.com/NPFS42/Kinetic-Torch/issues/new?title=Kinetic%20Torch%20beta%20tester%20request) with your phone model and Android version. GitHub issues are public, so **don't post private contact information**. We especially value reports about missed chops, false activations, and background battery use.
+
+> **Please note:** GitHub Actions debug APKs and unsigned build artifacts are for development/acceptance testing, **not official Play or F-Droid releases**. For F-Droid-flavor device-testing instructions, see the [distribution guide](docs/DISTRIBUTION_STREAMS.md).
+
+## Compatibility
+
+- **Android 8.0 (API 26) or later**, with a functioning rear hardware flash LED.
+- Gesture reliability varies by device, sensor, battery management, and manufacturer; **1.3.5's new profiles and settings lock still need hardware acceptance tests**.
+- **Motorola / Moto devices are intentionally excluded in-app** to avoid conflicts with the manufacturer's built-in chop gesture. Store-side exclusions are tracked separately.
+- When testing Play and F-Droid variants side by side, **arm only one gesture listener at a time**.
+
+See the [acceptance checklist](docs/SETTINGS_PROFILES_ACCEPTANCE.md) and [compatibility notes](docs/MOTOROLA_EXCLUSION_AND_DEFAULTS.md).
+
+## Privacy and openness
+
+Kinetic Torch works offline without an account and does not request internet access. Debug builds can collect **local** diagnostics for troubleshooting; release builds have diagnostic recording disabled. See the [privacy policy](https://sovereignresearch.net/kinetic-torch-privacy.html), [license](LICENSE), [source and artwork scope](LICENSE-SCOPE.md), and [artwork/trademark terms](ARTWORK-AND-TRADEMARKS.md).
+
+## For developers
+
+- [Build instructions and separate Play / F-Droid identities](docs/DISTRIBUTION_STREAMS.md)
+- [Changelog](CHANGELOG.md)
+- [Report a bug or request a feature](https://github.com/NPFS42/Kinetic-Torch/issues)
+- [Security policy](SECURITY.md)
+
+<details>
+<summary><strong>Expand engineering notes, historical source recovery, and release requirements</strong></summary>
 
 ## Current development source: 1.3.5 (versionCode 20; internal testing)
 
@@ -60,3 +131,5 @@ Original project-owned software source uses **GNU AGPL version 3 only** (`AGPL-3
 The current Android settings screen includes a **Source code & AGPLv3 license** button. It opens the public source repository using a user-initiated browser intent and does not grant the app network permissions. The complete AGPLv3 text is packaged in `app/src/main/assets/COPYING`.
 
 Future signed APK/AAB releases must be matched to an exact tagged source revision, with dependency notices and a clean source package. See [AGPL release gate](docs/AGPL_RELEASE_GATE.md). These source changes are not an Android release; earlier GPLv3 releases keep their prior grants.
+
+</details>
