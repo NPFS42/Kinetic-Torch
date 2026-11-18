@@ -9,9 +9,21 @@ if [[ $# -ne 1 || ! -x "$1" ]]; then
 fi
 
 aapt="$1"
+gradle_config='app/build.gradle.kts'
 play_debug='app/build/outputs/apk/play/debug/app-play-debug.apk'
 fdroid_debug='app/build/outputs/apk/fdroid/debug/app-fdroid-debug.apk'
 fdroid_release='app/build/outputs/apk/fdroid/release/app-fdroid-release-unsigned.apk'
+
+# Read the canonical version once, so the package-identity check stays in sync
+# when release versions change. Reject ambiguous or missing declarations.
+mapfile -t version_codes < <(sed -nE 's/^[[:space:]]*versionCode[[:space:]]*=[[:space:]]*([0-9]+)[[:space:]]*$/\1/p' "$gradle_config")
+mapfile -t version_names < <(sed -nE 's/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"([^"]+)"[[:space:]]*$/\1/p' "$gradle_config")
+if [[ ${#version_codes[@]} -ne 1 || ${#version_names[@]} -ne 1 ]]; then
+  printf 'Expected exactly one versionCode and versionName in %s\n' "$gradle_config" >&2
+  exit 1
+fi
+version_code="${version_codes[0]}"
+version_name="${version_names[0]}"
 
 verify_apk() {
   local apk="$1" expected_id="$2" expected_name="$3"
@@ -23,7 +35,7 @@ verify_apk() {
 
   badging="$("$aapt" dump badging "$apk")"
   permissions="$("$aapt" dump permissions "$apk")"
-  if [[ "$badging" != *"package: name='$expected_id' versionCode='20' versionName='$expected_name'"* ]]; then
+  if [[ "$badging" != *"package: name='$expected_id' versionCode='$version_code' versionName='$expected_name'"* ]]; then
     printf 'Unexpected application ID or version in %s\n' "$apk" >&2
     printf '%s\n' "${badging%%$'\n'*}" >&2
     return 1
@@ -38,9 +50,9 @@ verify_apk() {
     printf 'AGPLv3 license asset missing or mismatched in %s\n' "$apk" >&2
     return 1
   fi
-  printf 'Validated %s: %s, version 1.3.5/code 20, offline manifest and AGPL asset\n' "$apk" "$expected_id"
+  printf 'Validated %s: %s, version %s/code %s, offline manifest and AGPL asset\n' "$apk" "$expected_id" "$version_name" "$version_code"
 }
 
-verify_apk "$play_debug" 'com.npfs.stars.kinetictorch.debug' '1.3.5-debug'
-verify_apk "$fdroid_debug" 'com.npfs.stars.kinetictorch.fdroid.debug' '1.3.5-debug'
-verify_apk "$fdroid_release" 'com.npfs.stars.kinetictorch.fdroid' '1.3.5'
+verify_apk "$play_debug" 'com.npfs.stars.kinetictorch.debug' "${version_name}-debug"
+verify_apk "$fdroid_debug" 'com.npfs.stars.kinetictorch.fdroid.debug' "${version_name}-debug"
+verify_apk "$fdroid_release" 'com.npfs.stars.kinetictorch.fdroid' "$version_name"

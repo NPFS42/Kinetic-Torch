@@ -1,3 +1,14 @@
+# 1.3.6 (code 21) — rolling vibration guard and tabbed UI (release candidate)
+
+- Recognize sustained, rapid acceleration reversals from washboard-road shaking and physically transmitted bass vibrations before passing samples to the double-chop recognizer.
+- Suppress gesture toggles for 30 seconds after the most recent qualifying vibration; repeated vibration renews the hold. Manual torch controls remain available.
+- Request 100 Hz motion samples (where the Android sensor permits) to improve vibration coverage; this does not use the microphone or infer Spotify playback.
+- Preserve existing force, timing, standby, lock, and calibration preferences; add regression tests for double-chop preservation, bass, road vibration, rolling extension, and recovery.
+- Reorganize the interface into fixed **Main** and **Gesture Tuning** tabs. Torch control and Quick access stay together on Main; sliders, the calibration lock, and profile actions move to Gesture Tuning. The selected tab survives activity recreation.
+- Awaiting actual Pixel/car stereo acceptance and full Android build verification; not yet published to Play.
+
+---
+
 # 1.3.5 — settings protection and interface refresh (Play internal testing)
 
 - Adds a persistent calibration lock with a two-second touch-and-hold unlock; torch arming and Quick Settings remain usable while locked.

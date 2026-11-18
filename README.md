@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/NPFS42/Kinetic-Torch/actions/workflows/debug-logging.yml"><img src="https://github.com/NPFS42/Kinetic-Torch/actions/workflows/debug-logging.yml/badge.svg?branch=main" alt="Android build and test status"></a>
-  &nbsp; <strong>Android 8.0+</strong> &nbsp;·&nbsp; <strong>AGPL-3.0-only</strong> &nbsp;·&nbsp; <strong>v1.3.5 beta</strong>
+  &nbsp; <strong>Android 8.0+</strong> &nbsp;·&nbsp; <strong>AGPL-3.0-only</strong> &nbsp;·&nbsp; <strong>v1.3.6 candidate</strong>
 </p>
 
 <p align="center">
@@ -22,7 +22,7 @@
   <a href="#for-developers">Developers</a>
 </p>
 
-> **Release status:** Version **1.3.5 (code 20)** is in Google Play **internal testing** (per the project owner). The [F-Droid submission is under review](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/57530). Neither listing should be mistaken for a generally available public release.
+> **Release status:** Version **1.3.5 (code 20)** is in Google Play **internal testing** (per the project owner). Version **1.3.6 (code 21)** is a new build candidate, not yet uploaded. The [F-Droid submission](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/57530) is closed pending a March 1, 2027 retry. Neither listing is a generally available public release.
 
 ## Preview
 
@@ -90,7 +90,7 @@ Kinetic Torch works offline without an account and does not request internet acc
 <details>
 <summary><strong>Expand engineering notes, historical source recovery, and release requirements</strong></summary>
 
-## Current development source: 1.3.5 (versionCode 20; internal testing)
+## Current development source: 1.3.6 (versionCode 21; release candidate)
 
 Two distribution flavors share this source: Google Play uses the existing package `com.npfs.stars.kinetictorch`, while F-Droid uses `com.npfs.stars.kinetictorch.fdroid`. Both use minSdk 26, targetSdk 36, compileSdk 36, and Java/Kotlin 17. Debug variants append `.debug` to their respective package IDs. See [distribution streams](docs/DISTRIBUTION_STREAMS.md).
 
@@ -100,12 +100,14 @@ automatic fallback are disabled/commented out; the implementation is retained in
 Devices without a hardware flash LED cannot arm Kinetic Torch. An old saved white-screen
 preference does not restore it. See [deprecation notes](docs/SCREEN_TORCH_DEPRECATION.md).
 
-Version 1.3.5 builds on the signed 1.3.4 LED-only candidate and adds a calibration lock, saved/restoreable local profiles, a redesigned settings screen, and a 5.0 m/s² force-slider minimum. The 1.3.4 signed APK/AAB remain unchanged. The owner confirmed both LED ON/OFF and haptic feedback in RC6 of 1.3.3; these new settings features still require hardware testing.
+Version 1.3.6 builds on 1.3.5 with the rolling vibration guard and tabbed interface. Version 1.3.5 introduced the calibration lock, saved/restorable profiles, redesigned settings, and 5.0 m/s² slider minimum. The owner confirmed LED ON/OFF and haptic feedback in RC6 of 1.3.3; the new 1.3.6 vibration behavior still requires hardware testing.
 
 - Gesture defaults: **12 m/s²**, **750 ms**; Reset sliders restores those and the other slider defaults without changing arm state.
 - More forgiving OFF gesture: **75%** of configured force, **+250 ms** timing allowance; adjusted inter-chop quiet-valley detector with a 200 ms recoil guard.
 - Vibration: **two 240 ms pulses** for ON; **one 220 ms pulse** for OFF after OS LED-off confirmation, classified as Android hardware feedback.
 - Proximity blocks covered accidental ON but never prevents deliberate OFF of an active torch.
+- **Unreleased vibration guard:** repeated rapid motion (washboard roads or strong bass transmitted through a phone mount) pauses gesture recognition for 30 seconds, restarting the timer with each newly qualified vibration. The phone must physically vibrate; the app does not listen to audio or inspect Spotify. The existing calibration stays unchanged. Hardware testing is still required.
+- **Unreleased tabbed UI:** Main holds Torch control and Quick access; Gesture Tuning holds the sliders, settings lock, and saved profiles. Navigation stays visible at the top while scrolling, and tab selection is restored after activity recreation.
 - Motorola/Moto gestures are disabled in-app to avoid conflicting with the OEM feature; store-side model exclusions remain a separate Play Console task.
 - The settings respect modern Android status/navigation insets.
 - Debug builds record local diagnostic events; release builds disable diagnostic recording via `BuildConfig.DIAGNOSTICS_ENABLED=false`. No internet account or data transfer is required.
@@ -114,7 +116,7 @@ See [CHANGELOG.md](CHANGELOG.md) and [docs/MOTOROLA_EXCLUSION_AND_DEFAULTS.md](d
 
 ## Build and distribution
 
-The GitHub Actions workflow tests both flavors and builds unsigned release candidates for each distribution, plus Play debug/diagnostic variants. Debug and unsigned CI artifacts are **not** store updates. Version 1.3.5/code 20 has been released to Play internal testing; the separate F-Droid submission is now [open for review as merge request !57530](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/57530).
+The GitHub Actions workflow tests both flavors and builds unsigned release candidates for each distribution, plus Play debug/diagnostic variants. Debug and unsigned CI artifacts are **not** store updates. Version 1.3.5/code 20 remains the reported Play internal-test release; version 1.3.6/code 21 is a source/build candidate, not a Play deployment. The [original F-Droid submission !57530](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/57530) was closed, with resubmission deferred until March 1, 2027.
 
 Configure the original app signing or Play upload keystore through private environment variables `KINETIC_KEYSTORE_PATH`, `KINETIC_KEYSTORE_PASSWORD`, `KINETIC_KEY_ALIAS`, and `KINETIC_KEY_PASSWORD` on the trusted release machine; never commit keys or passwords. Build the Play AAB with `:app:bundlePlayRelease`. F-Droid builds `:app:assembleFdroidRelease` from a tagged source revision and signs independently. Moving source to `main` does not deploy either store update.
 
