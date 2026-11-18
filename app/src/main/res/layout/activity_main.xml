@@ -15,18 +15,19 @@
         android:importantForAccessibility="no"
         android:src="@drawable/ic_launcher_foreground" />
 
-    <ScrollView
-        android:id="@+id/rootScroll"
+    <LinearLayout
+        android:id="@+id/mainScreenColumn"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:clipToPadding="true"
-        android:fillViewport="true">
+        android:orientation="vertical">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="18dp">
+            android:paddingLeft="18dp"
+            android:paddingTop="18dp"
+            android:paddingRight="18dp">
 
             <TextView
                 android:layout_width="match_parent"
@@ -52,8 +53,49 @@
                 android:text="Dial it in. Lock it down. Light the way."
                 android:textColor="#A0B5C5"
                 android:textSize="13sp" />
+        </LinearLayout>
+
+        <com.google.android.material.tabs.TabLayout
+            android:id="@+id/tabNavigation"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="18dp"
+            android:layout_marginTop="14dp"
+            android:layout_marginRight="18dp"
+            android:background="@drawable/bg_kinetic_card"
+            app:tabGravity="fill"
+            app:tabIndicatorColor="#59E6EF"
+            app:tabMode="fixed"
+            app:tabSelectedTextColor="#F5FBFF"
+            app:tabTextColor="#A0B5C5">
+
+            <com.google.android.material.tabs.TabItem
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Main" />
+
+            <com.google.android.material.tabs.TabItem
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Gesture Tuning" />
+        </com.google.android.material.tabs.TabLayout>
+
+        <ScrollView
+            android:id="@+id/rootScroll"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:clipToPadding="true"
+            android:fillViewport="true">
 
             <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="18dp">
+
+            <LinearLayout
+                android:id="@+id/cardTorchControl"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="18dp"
@@ -96,9 +138,18 @@
                     android:text="Live chop-plane peak: 0.0 m/s²"
                     android:textColor="#92E0DC"
                     android:textSize="12sp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="Vibration guard · Road and bass shaking · Rolling 30s hold"
+                    android:textColor="#92E0DC"
+                    android:textSize="12sp" />
             </LinearLayout>
 
             <LinearLayout
+                android:id="@+id/cardGestureTuning"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="14dp"
@@ -232,6 +283,7 @@
             </LinearLayout>
 
             <LinearLayout
+                android:id="@+id/cardQuickAccess"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="14dp"
@@ -307,6 +359,7 @@
                         app:cornerRadius="14dp" />
                 </LinearLayout>
             </LinearLayout>
-        </LinearLayout>
-    </ScrollView>
+            </LinearLayout>
+        </ScrollView>
+    </LinearLayout>
 </FrameLayout>

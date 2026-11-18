@@ -154,8 +154,10 @@ class ChopDetectionService : Service(), SensorEventListener {
             "confirmed_led" to confirmedLedState, *fields)
     }
     private val detector = ChopDetector()
+    private val vibrationGuard = VibrationGuard()
     private val gravityFilter = GravityHighPass()
     private val linearBuffer = FloatArray(3)
+    private var lastVibrationReportMs = -1L
 
     /** Any active LED, including one someone else switched on (used for toggle/off logic). */
     private fun isAnyTorchActive(): Boolean {
@@ -382,6 +384,7 @@ class ChopDetectionService : Service(), SensorEventListener {
         trace("gesture_reset", "GESTURE_AND_GRAVITY_FILTER_RESET_COOLDOWN_RETAINED")
         detector.reset()
         gravityFilter.reset()
+        vibrationGuard.resetPattern() // keep the 30s hold across brief sensor deactivations
     }
 
     private fun applyWakeModePolicy() {
@@ -435,7 +438,9 @@ class ChopDetectionService : Service(), SensorEventListener {
                 ?: sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
             if (motionSensor == null) trace("motion_sensor_missing", "NO_LINEAR_OR_RAW_ACCELEROMETER")
             motionSensor?.let { sensor ->
-                val registered = sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_GAME, 0)
+                // 100 Hz requested: more useful than 50 Hz for subwoofer/mount oscillations.
+                // Actual sampling rate varies by device and cannot capture every bass frequency.
+                val registered = sensorManager.registerListener(this, sensor, 10_000, 0)
                 trace("motion_sensor_registration", if (registered) "REGISTERED" else "REGISTRATION_FAILED",
                     "sensor_type" to sensor.type, "sensor_name" to sensor.name,
                     "sensor_wakeup" to sensor.isWakeUpSensor)
@@ -515,6 +520,23 @@ class ChopDetectionService : Service(), SensorEventListener {
             DebugLog.event("motion_sample", "reason" to "GRAVITY_FILTER_WARMUP",
                 "gesture_id" to gestureId, "linear_x" to lin[0], "linear_y" to lin[1], "linear_z" to lin[2])
             return // raw accelerometer fallback still settling
+        }
+        if (vibrationGuard.isIgnoringOwnHaptic(now)) {
+            detector.reset()
+            return
+        }
+        val wasSuppressed = vibrationGuard.remainingMs(now) > 0L
+        if (vibrationGuard.observe(lin[0], lin[1], lin[2], now)) {
+            // Never let a chop begun before a vibration episode complete afterward.
+            detector.reset()
+            if (!wasSuppressed || lastVibrationReportMs < 0L || now - lastVibrationReportMs >= 5_000L) {
+                trace("vibration_guard", if (wasSuppressed) "ROLLING_HOLD_EXTENDED_OR_ACTIVE" else "SUSTAINED_VIBRATION_DETECTED",
+                    "suppression_remaining_ms" to vibrationGuard.remainingMs(now),
+                    "suppression_window_ms" to VibrationGuard.SUPPRESSION_MS,
+                    "torch_on" to torchOn)
+                lastVibrationReportMs = now
+            }
+            return
         }
         if (detector.onLinearAcceleration(lin[0], lin[1], lin[2], now, torchIsOn = torchOn)) {
             toggleActiveTorch()
@@ -752,6 +774,10 @@ class ChopDetectionService : Service(), SensorEventListener {
                     TorchHapticPatterns.deactivationAmplitudes(), -1
                 )
             }
+            val hapticDurationMs = if (turnedOn) TorchHapticPatterns.activationTimingsMs().sum()
+                else TorchHapticPatterns.deactivationTimingsMs().sum()
+            // Avoid reading our own haptic feedback as a bass/road oscillation.
+            vibrationGuard.ignoreOwnHaptic(SystemClock.elapsedRealtime(), hapticDurationMs + 200L)
             if (!turnedOn && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 // Android may silently ignore UNKNOWN-usage vibration from a non-visible app,
                 // even if the native API returns. Hardware feedback is a policy-permitted

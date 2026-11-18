@@ -25,6 +25,7 @@ import android.view.View
 import android.widget.Button
 import android.widget.CompoundButton
 import android.widget.EditText
+import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
@@ -38,9 +39,14 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import com.google.android.material.materialswitch.MaterialSwitch
+import com.google.android.material.tabs.TabLayout
 import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity(), SensorEventListener {
+
+    companion object {
+        private const val STATE_SELECTED_TAB = "selected_tab"
+    }
 
     private lateinit var prefs: SharedPreferences
     private lateinit var profiles: TorchProfileStore
@@ -133,12 +139,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // status bar, navigation/gesture bar, and display-cutout safe areas.
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_main)
-        val settingsScroll = findViewById<View>(R.id.rootScroll)
+        val screenColumn = findViewById<View>(R.id.mainScreenColumn)
         val initialPadding = intArrayOf(
-            settingsScroll.paddingLeft, settingsScroll.paddingTop,
-            settingsScroll.paddingRight, settingsScroll.paddingBottom
+            screenColumn.paddingLeft, screenColumn.paddingTop,
+            screenColumn.paddingRight, screenColumn.paddingBottom
         )
-        ViewCompat.setOnApplyWindowInsetsListener(settingsScroll) { view, insets ->
+        ViewCompat.setOnApplyWindowInsetsListener(screenColumn) { view, insets ->
             val safe = insets.getInsets(
                 WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
             )
@@ -148,7 +154,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             )
             insets
         }
-        ViewCompat.requestApplyInsets(settingsScroll)
+        ViewCompat.requestApplyInsets(screenColumn)
 
         prefs = getSharedPreferences(ChopDetectionService.PREFS_NAME, MODE_PRIVATE)
         profiles = TorchProfileStore(prefs)
@@ -167,6 +173,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 .show()
             return
         }
+
+        setupTabbedNavigation(savedInstanceState?.getInt(STATE_SELECTED_TAB, 0) ?: 0)
 
         val txtHardwareStatus = findViewById<TextView>(R.id.txtHardwareStatus)
         txtLivePeakReadout = findViewById(R.id.txtLivePeakReadout)
@@ -451,6 +459,38 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 Toast.makeText(this, "Unrestricted battery already active.", Toast.LENGTH_SHORT).show()
             }
         }
+    }
+
+    /** Two persistent top tabs: core torch + quick access, or protected gesture calibration. */
+    private fun setupTabbedNavigation(restoredIndex: Int) {
+        val tabs = findViewById<TabLayout>(R.id.tabNavigation)
+        val torchCard = findViewById<View>(R.id.cardTorchControl)
+        val tuningCard = findViewById<View>(R.id.cardGestureTuning)
+        val quickAccessCard = findViewById<View>(R.id.cardQuickAccess)
+        val scroll = findViewById<ScrollView>(R.id.rootScroll)
+
+        fun showTab(position: Int) {
+            val showingMain = position == 0
+            torchCard.visibility = if (showingMain) View.VISIBLE else View.GONE
+            quickAccessCard.visibility = if (showingMain) View.VISIBLE else View.GONE
+            tuningCard.visibility = if (showingMain) View.GONE else View.VISIBLE
+            scroll.post { scroll.scrollTo(0, 0) }
+        }
+
+        tabs.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
+            override fun onTabSelected(tab: TabLayout.Tab) = showTab(tab.position)
+            override fun onTabUnselected(tab: TabLayout.Tab) = Unit
+            override fun onTabReselected(tab: TabLayout.Tab) = showTab(tab.position)
+        })
+
+        val selectedIndex = restoredIndex.coerceIn(0, tabs.tabCount - 1)
+        tabs.getTabAt(selectedIndex)?.select()
+        showTab(selectedIndex) // initial Main tab may be selected before listener registration
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putInt(STATE_SELECTED_TAB, findViewById<TabLayout>(R.id.tabNavigation).selectedTabPosition)
+        super.onSaveInstanceState(outState)
     }
 
     /** Restore calibration atomically, preserving arm state, permissions, and saved profiles. */
