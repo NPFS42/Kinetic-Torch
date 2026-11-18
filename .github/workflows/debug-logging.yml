@@ -49,6 +49,7 @@ jobs:
           sha256sum app/build/outputs/bundle/playDiagnostic/app-play-diagnostic.aab
           sha256sum app/build/outputs/apk/fdroid/release/app-fdroid-release-unsigned.apk
       - name: Upload Play debug APK
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: kinetic-torch-play-debug-APK
@@ -56,6 +57,7 @@ jobs:
           if-no-files-found: error
           retention-days: 3
       - name: Upload separately installable F-Droid debug test APK
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: kinetic-torch-fdroid-debug-APK-FOR-DEVICE-TESTING
@@ -63,6 +65,7 @@ jobs:
           if-no-files-found: error
           retention-days: 3
       - name: Upload unsigned Play artifacts (not for distribution)
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: kinetic-torch-play-UNSIGNED-DO-NOT-PUBLISH
@@ -71,16 +74,17 @@ jobs:
             app/build/outputs/bundle/playDiagnostic/*.aab
             app/build/outputs/bundle/playRelease/*.aab
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 1
       - name: Upload unsigned F-Droid candidate (not for distribution)
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: kinetic-torch-fdroid-UNSIGNED-DO-NOT-PUBLISH
           path: app/build/outputs/apk/fdroid/release/*.apk
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 1
       - name: Publish unit test results
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: kinetic-torch-dual-flavor-unit-test-results
@@ -90,4 +94,4 @@ jobs:
             app/build/test-results/testFdroidDebugUnitTest/
             app/build/reports/tests/testFdroidDebugUnitTest/
           if-no-files-found: ignore
-          retention-days: 3
+          retention-days: 1
