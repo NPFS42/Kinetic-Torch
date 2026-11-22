@@ -1,0 +1,3 @@
+S.T.A.R.S. Kinetic Torch 1.3.7 (build 22)
+
+Main-screen controls now let you monitor shaking and separately choose whether road or bass vibrations block flashlight chops. Changing either setting clears the previous 30-second vibration hold. Existing torch controls, proximity protection, saved profiles and gesture tuning are preserved.
