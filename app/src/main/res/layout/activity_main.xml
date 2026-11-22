@@ -142,8 +142,37 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:text="Vibration guard · Road and bass shaking · Rolling 30s hold"
+                    android:layout_marginTop="14dp"
+                    android:text="@string/motion_guard_title"
+                    android:letterSpacing="0.15"
+                    android:textColor="#59E6EF"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/switchShakeDetection"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="@string/motion_detection_switch"
+                    android:textColor="#F5FBFF"
+                    android:textSize="15sp" />
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/switchVibrationGuard"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="@string/motion_blocking_switch"
+                    android:textColor="#F5FBFF"
+                    android:textSize="15sp" />
+
+                <TextView
+                    android:id="@+id/txtMotionGuardStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="@string/motion_guard_protecting"
                     android:textColor="#92E0DC"
                     android:textSize="12sp" />
             </LinearLayout>
