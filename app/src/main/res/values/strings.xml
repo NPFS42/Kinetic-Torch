@@ -9,6 +9,12 @@
     <string name="hardware_status_format">%1$s • %2$s</string>
     <string name="force_threshold_format">Chop force · %.1f m/s²</string>
     <string name="live_peak_format">Live Chop-Plane Peak: %1$.1f m/s² [%2$s]</string>
+    <string name="motion_guard_title">MOTION GUARD</string>
+    <string name="motion_detection_switch">Detect road / bass shaking</string>
+    <string name="motion_blocking_switch">Block gestures during shaking</string>
+    <string name="motion_guard_protecting">Protection on · Rolling 30s hold after shaking</string>
+    <string name="motion_guard_monitor_only">Monitor only · Chops are never blocked by shaking</string>
+    <string name="motion_guard_detection_disabled">Shaking detection off · No vibration lockout</string>
     <string name="reset_sliders_button">Reset sliders to defaults</string>
     <string name="reset_sliders_done">Slider defaults restored</string>
     <string name="motorola_excluded_title">Use Motorola\'s built-in gesture</string>
