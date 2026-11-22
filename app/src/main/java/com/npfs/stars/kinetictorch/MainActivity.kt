@@ -54,6 +54,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var cameraManager: CameraManager
     private lateinit var txtLivePeakReadout: TextView
     private lateinit var switchService: MaterialSwitch
+    private lateinit var switchShakeDetection: MaterialSwitch
+    private lateinit var switchVibrationGuard: MaterialSwitch
+    private lateinit var txtMotionGuardStatus: TextView
     private lateinit var btnSettingsLock: Button
     private lateinit var btnRestoreProfile: Button
     private lateinit var txtSettingsLockStatus: TextView
@@ -179,6 +182,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         val txtHardwareStatus = findViewById<TextView>(R.id.txtHardwareStatus)
         txtLivePeakReadout = findViewById(R.id.txtLivePeakReadout)
         switchService = findViewById(R.id.switchServiceEnable)
+        switchShakeDetection = findViewById(R.id.switchShakeDetection)
+        switchVibrationGuard = findViewById(R.id.switchVibrationGuard)
+        txtMotionGuardStatus = findViewById(R.id.txtMotionGuardStatus)
         // DEPRECATED: screen torch settings switch removed from the active layout.
         // val switchScreenTorch = findViewById<MaterialSwitch>(R.id.switchScreenTorchFallback)
 
@@ -263,8 +269,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             btnAddQsTile.isEnabled = false
         }
 
-        // 1. Master Service Toggle (state is re-synced from prefs in onResume)
+        // Main-screen switches remain usable even if the gesture tuning sliders are locked.
+        // Preference changes reach the running service through its existing listener.
         refreshServiceSwitch()
+        refreshMotionGuardSwitches()
 
         // 2. Chop Force Threshold Slider (5.0 to 35.0 m/s², 0.1 increments).
         // Earlier builds permitted 5.0; preserve Lucas's validated fast-shake setting.
@@ -571,6 +579,37 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         switchService.setOnCheckedChangeListener(serviceToggleListener)
     }
 
+    /** Keep the two main-screen guard controls in sync with persisted service settings. */
+    private fun refreshMotionGuardSwitches() {
+        val detecting = prefs.getBoolean(ChopDetectionService.KEY_SHAKE_DETECTION_ENABLED, true)
+        val blocking = prefs.getBoolean(ChopDetectionService.KEY_VIBRATION_GUARD_ENABLED, true)
+        switchShakeDetection.setOnCheckedChangeListener(null)
+        switchVibrationGuard.setOnCheckedChangeListener(null)
+        switchShakeDetection.isChecked = detecting
+        switchVibrationGuard.isChecked = blocking
+        updateMotionGuardStatus()
+        switchShakeDetection.setOnCheckedChangeListener { _, checked ->
+            prefs.edit { putBoolean(ChopDetectionService.KEY_SHAKE_DETECTION_ENABLED, checked) }
+            DebugLog.event("ui_shake_detection_toggle", "enabled" to checked)
+            updateMotionGuardStatus()
+        }
+        switchVibrationGuard.setOnCheckedChangeListener { _, checked ->
+            prefs.edit { putBoolean(ChopDetectionService.KEY_VIBRATION_GUARD_ENABLED, checked) }
+            DebugLog.event("ui_vibration_guard_toggle", "enabled" to checked)
+            updateMotionGuardStatus()
+        }
+    }
+
+    private fun updateMotionGuardStatus() {
+        val detecting = prefs.getBoolean(ChopDetectionService.KEY_SHAKE_DETECTION_ENABLED, true)
+        val blocking = prefs.getBoolean(ChopDetectionService.KEY_VIBRATION_GUARD_ENABLED, true)
+        txtMotionGuardStatus.setText(when {
+            !detecting -> R.string.motion_guard_detection_disabled
+            !blocking -> R.string.motion_guard_monitor_only
+            else -> R.string.motion_guard_protecting
+        })
+    }
+
     /** Android 13+ hides the foreground service's Disarm notification without this. */
     private fun requestNotificationPermissionIfNeeded() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -624,6 +663,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         if (DeviceEligibility.isMotorolaDevice()) return
         DebugLog.event("ui_resumed", "reason" to "CALIBRATION_READOUT_IS_NOT_GESTURE_ACCEPTANCE")
         refreshServiceSwitch()
+        refreshMotionGuardSwitches()
         refreshSettingsLockUi()
         // Heal a service that should be armed but isn't running (force-stop, restored settings, OEM kill)
         if (hasLedFlash && prefs.getBoolean(ChopDetectionService.KEY_SERVICE_ENABLED, false)) {

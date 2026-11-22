@@ -8,6 +8,43 @@ import kotlin.math.sin
 
 class VibrationGuardTest {
     @Test
+    fun turningOffGestureBlockingClearsHoldAndAllowsDetectionOnlyMode() {
+        val guard = VibrationGuard()
+        for (t in 0L..600L step 20L) {
+            guard.observe(0f, 0f, if ((t / 20L) % 2L == 0L) 2.5f else -2.5f, t)
+        }
+        assertTrue(guard.isBlocking(600L))
+        guard.configure(detectShaking = true, blockGestures = false)
+        assertFalse(guard.isBlocking(601L))
+        assertFalse(guard.observe(0f, 0f, 0f, 601L)) // stale hold was cleared
+
+        var detected = false
+        for (t in 700L..1_300L step 20L) {
+            detected = guard.observe(0f, 0f, if ((t / 20L) % 2L == 0L) 2.5f else -2.5f, t)
+        }
+        assertTrue(detected) // detector keeps reporting for diagnostics
+        assertFalse(guard.isBlocking(1_300L))
+        guard.configure(detectShaking = true, blockGestures = true)
+        assertFalse(guard.isBlocking(1_301L)) // re-enabling starts a fresh pattern
+    }
+
+    @Test
+    fun disablingDetectionClearsGuardAndLeavesChopDetectorAvailable() {
+        val guard = VibrationGuard()
+        for (t in 0L..600L step 20L) {
+            guard.observe(0f, 0f, if ((t / 20L) % 2L == 0L) 2.5f else -2.5f, t)
+        }
+        assertTrue(guard.isBlocking(600L))
+        guard.configure(detectShaking = false, blockGestures = true)
+        assertFalse(guard.isBlocking(601L))
+        for (t in 700L..1_300L step 20L) {
+            assertFalse(guard.observe(0f, 0f, if ((t / 20L) % 2L == 0L) 2.5f else -2.5f, t))
+        }
+        guard.configure(detectShaking = true, blockGestures = true)
+        assertFalse(guard.isBlocking(1_301L))
+    }
+
+    @Test
     fun roadShakingArmsThirtySecondSuppression() {
         val guard = VibrationGuard()
         var suppressed = false

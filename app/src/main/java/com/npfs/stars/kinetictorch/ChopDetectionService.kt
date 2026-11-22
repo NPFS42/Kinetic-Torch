@@ -50,6 +50,8 @@ class ChopDetectionService : Service(), SensorEventListener {
         const val KEY_AUTO_OFF_MINUTES = "auto_off_minutes"     // Default: 10 min (0 = Disabled, 1..30)
         const val KEY_WAKE_MODE = "wake_mode"                   // 0=ScreenOn, 1=15s, 2=30s(Def), 3=2m, 4=10m, 5=AlwaysOn 24/7
         const val KEY_COOLDOWN_MS = "cooldown_ms"               // Default: 1000 ms
+        const val KEY_SHAKE_DETECTION_ENABLED = "shake_detection_enabled"  // Road/bass motion monitor
+        const val KEY_VIBRATION_GUARD_ENABLED = "vibration_guard_enabled"  // Block chops on detection
         const val KEY_FSI_PROMPTED = "fsi_prompted"             // DEPRECATED: historical setting
         const val ACTION_STOP_AND_OFF = "com.npfs.stars.kinetictorch.ACTION_STOP_AND_OFF"
 
@@ -370,12 +372,18 @@ class ChopDetectionService : Service(), SensorEventListener {
         detector.cooldownMs = sharedPrefs.getInt(KEY_COOLDOWN_MS, TorchDefaults.COOLDOWN_MS).toLong()
         autoOffMinutes = sharedPrefs.getInt(KEY_AUTO_OFF_MINUTES, TorchDefaults.AUTO_OFF_MINUTES)
         wakeMode = sharedPrefs.getInt(KEY_WAKE_MODE, TorchDefaults.WAKE_MODE).coerceIn(0, 5)
+        vibrationGuard.configure(
+            detectShaking = sharedPrefs.getBoolean(KEY_SHAKE_DETECTION_ENABLED, true),
+            blockGestures = sharedPrefs.getBoolean(KEY_VIBRATION_GUARD_ENABLED, true)
+        )
         trace("settings_snapshot", "CURRENT_DETECTOR_AND_POWER_POLICY",
             "force_threshold" to detector.forceThreshold, "chop_window_ms" to detector.chopWindowMs,
             "valley_ratio" to ChopDetector.VALLEY_RATIO,
             "off_force_ratio" to ChopDetector.OFF_FORCE_MULTIPLIER,
             "off_window_grace_ms" to ChopDetector.OFF_WINDOW_EXTENSION_MS,
             "cooldown_ms" to detector.cooldownMs, "auto_off_minutes" to autoOffMinutes,
+            "shake_detection_enabled" to vibrationGuard.detectionEnabled,
+            "vibration_guard_enabled" to vibrationGuard.blockingEnabled,
             "screen_torch_enabled" to false,
             "armed_pref" to sharedPrefs.getBoolean(KEY_SERVICE_ENABLED, false))
     }
@@ -527,16 +535,25 @@ class ChopDetectionService : Service(), SensorEventListener {
         }
         val wasSuppressed = vibrationGuard.remainingMs(now) > 0L
         if (vibrationGuard.observe(lin[0], lin[1], lin[2], now)) {
-            // Never let a chop begun before a vibration episode complete afterward.
-            detector.reset()
+            val blocking = vibrationGuard.isBlocking(now)
             if (!wasSuppressed || lastVibrationReportMs < 0L || now - lastVibrationReportMs >= 5_000L) {
-                trace("vibration_guard", if (wasSuppressed) "ROLLING_HOLD_EXTENDED_OR_ACTIVE" else "SUSTAINED_VIBRATION_DETECTED",
+                trace("vibration_guard", when {
+                    !blocking -> "VIBRATION_DETECTED_MONITOR_ONLY"
+                    wasSuppressed -> "ROLLING_HOLD_EXTENDED_OR_ACTIVE"
+                    else -> "SUSTAINED_VIBRATION_DETECTED"
+                },
                     "suppression_remaining_ms" to vibrationGuard.remainingMs(now),
                     "suppression_window_ms" to VibrationGuard.SUPPRESSION_MS,
+                    "chops_blocked" to blocking,
                     "torch_on" to torchOn)
                 lastVibrationReportMs = now
             }
-            return
+            if (blocking) {
+                // Never complete a chop begun before a blocked vibration episode.
+                detector.reset()
+                return
+            }
+            // Detection-only mode records vibration but never rejects a valid chop.
         }
         if (detector.onLinearAcceleration(lin[0], lin[1], lin[2], now, torchIsOn = torchOn)) {
             toggleActiveTorch()

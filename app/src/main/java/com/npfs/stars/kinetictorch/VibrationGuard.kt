@@ -39,6 +39,27 @@ internal class VibrationGuard {
     private var suppressionUntilMs = -1L
     private var ignoreOwnHapticUntilMs = -1L
 
+    var detectionEnabled = true
+        private set
+    var blockingEnabled = true
+        private set
+
+    /**
+     * User-facing switches are independent. Detection may remain active for diagnostics
+     * while gesture blocking is off. Changing either clears an old rolling suppression
+     * window, so restoring protection requires fresh sustained vibration.
+     */
+    fun configure(detectShaking: Boolean, blockGestures: Boolean) {
+        if (detectionEnabled == detectShaking && blockingEnabled == blockGestures) return
+        detectionEnabled = detectShaking
+        blockingEnabled = blockGestures
+        suppressionUntilMs = -1L
+        resetPattern()
+    }
+
+    fun isBlocking(nowMs: Long): Boolean =
+        detectionEnabled && blockingEnabled && remainingMs(nowMs) > 0L
+
     /** Clear the pattern on sensor re-registration, but retain a still-running safety hold. */
     fun resetPattern() {
         slowComponent.fill(0f)
@@ -61,6 +82,7 @@ internal class VibrationGuard {
 
     /** Returns true while a gesture is blocked, including a hold extended by this sample. */
     fun observe(x: Float, y: Float, z: Float, nowMs: Long): Boolean {
+        if (!detectionEnabled) return false
         if (isIgnoringOwnHaptic(nowMs)) return remainingMs(nowMs) > 0L
         if (!x.isFinite() || !y.isFinite() || !z.isFinite() || nowMs < 0L) {
             return remainingMs(nowMs) > 0L

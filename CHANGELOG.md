@@ -1,3 +1,13 @@
+# 1.3.7 (code 22) — main-screen motion guard controls (source candidate)
+
+- Add Main-tab switches to monitor road/bass shaking and independently enable or disable vibration-based chop blocking.
+- Preserve both switches across service and app restarts; switching the policy clears the previous rolling 30-second hold so a fresh motion pattern is required.
+- Detection-only mode reports vibration patterns without blocking normal double-chop attempts.
+- Keep proximity guard, torch routing, self-haptic exclusion, calibration lock and saved gesture settings unchanged.
+- Automated Play and F-Droid unit/build validation passed for the feature changes at code 21; version 1.3.7 requires its own post-bump build verification, release signing, and physical phone acceptance before publication.
+
+---
+
 # 1.3.6 (code 21) — rolling vibration guard and tabbed UI (release candidate)
 
 - Recognize sustained, rapid acceleration reversals from washboard-road shaking and physically transmitted bass vibrations before passing samples to the double-chop recognizer.
