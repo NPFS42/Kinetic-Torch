@@ -1,14 +1,13 @@
+# STARS/NPFS local-first policy: hosted validation explicitly deferred; private runners are not exposed to public PRs.
 name: Kinetic Torch dual-distribution validation
 on:
-  push:
-    branches: [main, feature/motorola-defaults-reset-20261103]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   distribution-builds:
+    # DEFERRED: hosted allowance exhausted; use a reviewed isolated local build.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
